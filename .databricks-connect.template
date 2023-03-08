@@ -1,0 +1,7 @@
+{
+  "host": "https://adb-3829509288383377.17.azuredatabricks.net",
+  "token": "replacetoken",
+  "cluster_id": "0227-135804-zvyawxy3",
+  "org_id": "3829509288383377",
+  "port": "15001"
+}
