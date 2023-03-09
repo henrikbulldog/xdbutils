@@ -4,7 +4,7 @@ import unittest
 from xdbutils.batch import Batch, async_wrap
 
 
-class BatchTest(unittest.TestCase):
+class BatchTestCase(unittest.TestCase):
     """ Test Batch """
 
     def test_batch(self):

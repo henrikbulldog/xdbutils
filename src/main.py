@@ -3,12 +3,9 @@
 
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, lit
-from pyspark.dbutils import DBUtils
 from xdbutils import fs
 
 spark = SparkSession.builder.getOrCreate()
-
-dbutils = DBUtils(spark)
 
 UNIFORM_PATH = "dbfs:/mnt/dpuniformstoragetest/aad__users/"
 
