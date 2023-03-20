@@ -4,7 +4,7 @@ import unittest
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import to_timestamp, lit, col
 
-from xdbutils.transforms import scd
+from xdbutils.transforms import scd2
 
 spark = SparkSession.builder.getOrCreate()
 
@@ -20,7 +20,7 @@ class TransformsScdTestCase(unittest.TestCase):
                 (2, "Beatrice Bolton"),
             ]).toDF(["id", "name"])
 
-        result_df = scd.diff(current_data_df, ["id"])
+        result_df = scd2.diff(current_data_df, ["id"])
 
         result_df.show(truncate=False)
 
@@ -44,7 +44,7 @@ class TransformsScdTestCase(unittest.TestCase):
                 (2, "Beatrice Bolton"),
             ]).toDF(["id", "name"])
 
-        first_diff_df = scd.diff(current_data_df, ["id"])
+        first_diff_df = scd2.diff(current_data_df, ["id"])
         latest_version_df = spark.sparkContext.parallelize(first_diff_df.collect()).toDF()
 
         latest_version_df.show(truncate=False)
@@ -54,7 +54,7 @@ class TransformsScdTestCase(unittest.TestCase):
                 (3, "Camillla Adams"),
             ]).toDF(["id", "name"]).cache()
 
-        result_df = scd.diff(
+        result_df = scd2.diff(
             current_data_df=current_data_updated_df,
             key_columns= ["id"],
             latest_version_df= latest_version_df,

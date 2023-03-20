@@ -1,11 +1,13 @@
-""" Transformations """
+""" Slowly changing dimension type 2 transfromations """
 
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import md5, isnull \
     ,col, when, concat_ws, current_timestamp, to_timestamp, lit
 from pyspark.sql.types import StructType, StructField, TimestampType, StringType
 
+
 spark = SparkSession.builder.getOrCreate()
+
 
 def diff(current_data_df: DataFrame,
          key_columns: list[str],

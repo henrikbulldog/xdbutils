@@ -17,7 +17,7 @@ def async_wrap(func):
     return run
 
 
-class Batch(list):
+class Batch(list[Callable]):
     """ Runs tasks in batches asynchronously """
 
 
@@ -45,7 +45,7 @@ class Batch(list):
         nest_asyncio.apply()
         asyncio.set_event_loop(asyncio.new_event_loop())
         return asyncio.get_event_loop().run_until_complete(self.__execute_in_parrallel())
-    
+
 
     def __repr__(self):
         return f"{self.__class__.__name__}({list.__repr__(self)})" 
