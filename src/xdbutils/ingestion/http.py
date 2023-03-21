@@ -10,7 +10,7 @@ def get(url: str,
         connector: StreamConnector,
         params: dict = None,
         headers: dict = None,
-        auth = None):
+        auth = None) -> None:
     """ HTTP GET request """
 
     with requests.Session() as session:
@@ -30,7 +30,7 @@ def post(url: str,
         connector: StreamConnector,
         params: dict = None,
         headers: dict = None,
-        auth = None):
+        auth = None) -> None:
     """ HTTP POST request """
 
     with requests.Session() as session:

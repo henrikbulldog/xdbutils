@@ -15,16 +15,20 @@ class S3StreamConnector(StreamConnector):
     def __init__(self,
                  bucket_name: str,
                  file_path: str,
-                 aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID", None),
-                 aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY", None),
-                 aws_session_token: str = os.getenv("AWS_SESSION_TOKEN", None),
-                 aws_region_name: str = os.getenv("AWS_DEFAULT_REGION", None)):
+                 aws_access_key_id: str = None,
+                 aws_secret_access_key: str = None,
+                 aws_session_token: str = None,
+                 aws_region_name: str = None):
 
         self.s3_client = boto3.Session(
-            region_name=aws_region_name,
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-            aws_session_token=aws_session_token
+            aws_access_key_id=aws_access_key_id if aws_access_key_id
+                else os.getenv("AWS_ACCESS_KEY_ID", None),
+            aws_secret_access_key=aws_secret_access_key if aws_secret_access_key
+                else os.getenv("AWS_SECRET_ACCESS_KEY", None),
+            aws_session_token=aws_session_token if aws_session_token
+                else os.getenv("AWS_SESSION_TOKEN", None),
+            region_name=aws_region_name if aws_region_name
+                else os.getenv("AWS_DEFAULT_REGION", None)
             ).client('s3')
         self.bucket_name = bucket_name
         self.file_path = file_path
@@ -39,3 +43,4 @@ class S3StreamConnector(StreamConnector):
         """ Write to stream """
         conf = TransferConfig(multipart_threshold=10000, max_concurrency=4)
         self.s3_client.upload_fileobj(input_stream, self.bucket_name, self.file_path, Config=conf)
+ 

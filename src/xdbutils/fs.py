@@ -1,7 +1,7 @@
 """ File System Utils """
 
 from datetime import datetime
-from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql import SparkSession
 from pyspark.dbutils import DBUtils
 
 spark = SparkSession.builder.getOrCreate()
@@ -28,7 +28,8 @@ def ls(
         max_size = 0
         for file_info in files:
             if not file_info.name.endswith("/") \
-                    and (file_info.name.endswith(data_file_extension) or data_file_extension == "*"):
+                and (file_info.name.endswith(data_file_extension)
+                    or data_file_extension == "*"):
                 file_count = file_count + 1
                 size = file_info.size
                 file_size += size
@@ -36,10 +37,11 @@ def ls(
                 max_size = max(size, max_size)
         if file_count > 0:
             lines.append(f"{indent}{path}: {file_count}"
-                         + " files avg size: {file_size / file_count}, min: {min_size}, max: {max_size}")
+                + f" files avg size: {file_size / file_count}, min: {min_size}, max: {max_size}")
         for file_info in files:
             if not file_info.name.endswith("/") \
-                    and (file_info.name.endswith(data_file_extension) or data_file_extension == "*"):
+                and (file_info.name.endswith(data_file_extension)
+                    or data_file_extension == "*"):
                 if print_files:
                     lines.append(f"{indent}- {file_info.path}, size: {size}")
             elif file_info.path != path:

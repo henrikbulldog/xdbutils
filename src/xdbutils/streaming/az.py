@@ -15,11 +15,13 @@ class AdfsStreamConnector(StreamConnector):
                  container: str,
                  directory: str,
                  file_name: str,
-                 storage_account_name: str = os.getenv("ADFS_DEFAULT_STORAGE_ACCOUNT", None)):
+                 storage_account_name: str = None):
 
         self.container = container
         self.directory = directory
         self.file_name = file_name
+        if storage_account_name == None:
+            storage_account_name = os.getenv("ADFS_DEFAULT_STORAGE_ACCOUNT", None)
         default_credential = DefaultAzureCredential()
         self.adfs_client = DataLakeServiceClient(
             account_url=f"https://{storage_account_name}.dfs.core.windows.net",
