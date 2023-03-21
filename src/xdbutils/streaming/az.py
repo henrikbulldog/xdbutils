@@ -15,7 +15,7 @@ class AdfsStreamConnector(StreamConnector):
                  container: str,
                  directory: str,
                  file_name: str,
-                 storage_account_name: str = os.environ['ADFS_DEFAULT_STORAGE_ACCOUNT']):
+                 storage_account_name: str = os.getenv("ADFS_DEFAULT_STORAGE_ACCOUNT", None)):
 
         self.container = container
         self.directory = directory

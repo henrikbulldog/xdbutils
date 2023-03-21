@@ -15,10 +15,10 @@ class S3StreamConnector(StreamConnector):
     def __init__(self,
                  bucket_name: str,
                  file_path: str,
-                 aws_access_key_id: str = os.environ['AWS_ACCESS_KEY_ID'],
-                 aws_secret_access_key: str = os.environ['AWS_SECRET_ACCESS_KEY'],
-                 aws_session_token: str = None,
-                 aws_region_name: str = os.environ['AWS_DEFAULT_REGION']):
+                 aws_access_key_id: str = os.getenv("AWS_ACCESS_KEY_ID", None),
+                 aws_secret_access_key: str = os.getenv("AWS_SECRET_ACCESS_KEY", None),
+                 aws_session_token: str = os.getenv("AWS_SESSION_TOKEN", None),
+                 aws_region_name: str = os.getenv("AWS_DEFAULT_REGION", None)):
 
         self.s3_client = boto3.Session(
             region_name=aws_region_name,
