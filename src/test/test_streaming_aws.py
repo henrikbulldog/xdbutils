@@ -16,7 +16,7 @@ class TestS3StreamConnector(unittest.TestCase):
         """ xdbutils.streaming.aws.S3StreamConnector write and read """
 
         bucket_name = os.environ['AWS_S3_BUCKET']
-        file_path = "openbrainn/test/testing.txt"
+        file_path = "tests3streamconnector/folder/test.txt"
         s3_connector = S3StreamConnector(bucket_name, file_path)
         payload = f"Testing.\n123.\næøåÆØÅ\n{datetime.datetime.now()}"
         with BytesIO() as stream:

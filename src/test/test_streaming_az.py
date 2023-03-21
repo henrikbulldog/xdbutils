@@ -15,10 +15,9 @@ class TestAz(unittest.TestCase):
         """ Test AdfsStreamConnector.read """
 
         connector = AdfsStreamConnector(
-            container="test",
-            directory="dir",
-            file_name="test.txt",
-            storage_account_name="xdbutilstest")
+            container="testadfsstreamconnector",
+            directory="folder",
+            file_name="test.txt")
 
         payload = f"Testing.\n123.\næøåÆØÅ\n{datetime.datetime.now()}"
 

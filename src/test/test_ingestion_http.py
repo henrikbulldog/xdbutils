@@ -6,6 +6,7 @@ import json
 from requests.auth import HTTPBasicAuth
 from xdbutils.ingestion import http
 from xdbutils.streaming.aws import S3StreamConnector
+from xdbutils.streaming.az import AdfsStreamConnector
 from xdbutils.streaming.string import StringStreamConnector
 
 
@@ -19,8 +20,12 @@ class TestIngestHttp(unittest.TestCase):
             StringStreamConnector(),
             S3StreamConnector(
                 bucket_name=os.environ['AWS_S3_BUCKET'],
-                file_path="openbrainn/test/testing.txt"
-                )
+                file_path="tests3streamconnector/folder/test.txt"
+                ),
+            AdfsStreamConnector(
+                container="testadfsstreamconnector",
+                directory="folder",
+                file_name="test.txt"),
         ]
 
 

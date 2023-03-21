@@ -40,6 +40,13 @@ class AdfsStreamConnector(StreamConnector):
         """ Write to stream """
 
         file_system_client = self.adfs_client.get_file_system_client(file_system=self.container)
+        if not file_system_client.exists():
+            file_system_client = self.adfs_client.create_file_system(file_system=self.container)
         directory_client = file_system_client.get_directory_client(self.directory)
+        if not directory_client.exists():
+            file_system_client.create_directory(self.directory)
+            directory_client = file_system_client.get_directory_client(self.directory)
         file_client = directory_client.create_file(self.file_name)
-        file_client.upload_data(input_stream, overwrite=True)
+        file_contents = input_stream.read()
+        file_client.append_data(data=file_contents, offset=0, length=len(file_contents))
+        file_client.flush_data(len(file_contents))
