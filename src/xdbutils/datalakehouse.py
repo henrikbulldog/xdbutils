@@ -20,7 +20,7 @@ class DataLakehouse():
         self.dbutils = DBUtils(spark)
         self.base_catalog = base_catalog
         self.raw_path = f"{base_path}/raw"
-        self.bronze_path = f"{base_path}/broze"
+        self.bronze_path = f"{base_path}/bronze"
         self.silver_path = f"{base_path}/silver"
         self.gold_path = f"{base_path}/gold"
 
