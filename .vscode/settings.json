@@ -12,6 +12,7 @@
         "src"
     ],
     "python.analysis.extraPaths": [
-        "c:\\Users\\Bruger\\.vscode\\extensions\\databricks.databricks-0.3.2-win32-x64\\resources\\python\\stubs"
+        "c:\\Users\\Bruger\\.vscode\\extensions\\databricks.databricks-0.3.2-win32-x64\\resources\\python\\stubs",
+        "./src"
     ]
 }

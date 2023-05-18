@@ -9,17 +9,19 @@
       // Update 'VARIANT' to pick a Python version: 3, 3.10, 3.9, 3.8, 3.7, 3.6
       // Append -bullseye or -buster to pin to an OS version.
       // Use -bullseye variants on local on arm64/Apple Silicon.
-      "VARIANT": "3.9",
-      "DEV_DATABRICKS_TOKEN": "${localEnv:DEV_DATABRICKS_TOKEN}",
+      "VARIANT": "3.10",
       "AWS_ACCESS_KEY_ID": "${localEnv:AWS_ACCESS_KEY_ID}",
       "AWS_SECRET_ACCESS_KEY": "${localEnv:AWS_SECRET_ACCESS_KEY}",
       "AWS_SESSION_TOKEN": "${localEnv:AWS_SESSION_TOKEN}",
       "AWS_DEFAULT_REGION": "${localEnv:AWS_DEFAULT_REGION}",
       "AWS_S3_BUCKET": "${localEnv:AWS_S3_BUCKET}",
-      "AZURE_CLIENT_ID": "${localEnv:AZURE_CLIENT_ID}",
-      "AZURE_TENANT_ID": "${localEnv:AZURE_TENANT_ID}",
-      "AZURE_CLIENT_SECRET": "${localEnv:AZURE_CLIENT_SECRET}",
-      "ADFS_DEFAULT_STORAGE_ACCOUNT": "${localEnv:ADFS_DEFAULT_STORAGE_ACCOUNT}"      
+      "AZURE_TENANT_ID": "${localEnv:databricks-azure-aad-tentant-id}",
+      "AZURE_CLIENT_ID": "${localEnv:databricks-service-principal-id}",
+      "AZURE_CLIENT_SECRET": "${localEnv:databricks-service-principal-secret}",
+      "ADFS_DEFAULT_STORAGE_ACCOUNT": "${localEnv:databricks-storage-account}",
+      "SPARK_REMOTE": "${localEnv:SPARK_REMOTE}",
+      "DATABRICKS_HOST": "${localEnv:DATABRICKS_HOST}",
+      "DATABRICKS_TOKEN": "${localEnv:DATABRICKS_TOKEN}"
     }
   },
   // Configure tool-specific properties.

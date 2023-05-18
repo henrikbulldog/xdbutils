@@ -33,6 +33,8 @@ def ls(
                 file_count = file_count + 1
                 size = file_info.size
                 file_size += size
+                if min_size == 0:
+                  min_size = size
                 min_size = min(size, min_size)
                 max_size = max(size, max_size)
         if file_count > 0:
@@ -111,7 +113,7 @@ class PartitionedFolder():
         if not path:
             path = self.path
         folders = []
-        files = self.ls(path)
+        files = ls(path)
         for f in files:
             if path.endswith("/") and f != path:
                 subfolders = self.ls(f)
