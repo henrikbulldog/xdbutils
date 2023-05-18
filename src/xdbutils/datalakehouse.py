@@ -61,7 +61,6 @@ class Job():
 
     def __init__(self, spark, catalog, source_path, source_system, entity, target_path, unity_catalog=True):
         self.spark = spark
-        self.sc = spark.sparkContext
         self.catalog = catalog
         self.source_system = source_system
         self.entity = entity
@@ -265,7 +264,7 @@ class Job():
                 "cloudFiles.includeExistingFiles": True,
                 **reader_options
             }
-            # Failed to find data source: cloudFiles. 
+            # Failed to find data source: cloudFiles.
             reader = (self.spark
                         .readStream
                         .format("cloudFiles")
@@ -279,8 +278,7 @@ class Job():
                 "eventhubs.consumerGroup": reader_options["eventhubs.consumerGroup"],
                 #Added to increase microbatch sizes if needed
                 "eventhubs.maxEventsPerTrigger": reader_options["eventhubs.maxEventsPerTrigger"],
-                "eventhubs.connectionString": 
-                    self.sc._jvm.org.apache.spark.eventhubs.EventHubsUtils.encrypt(connection_string),
+                "eventhubs.connectionString": connection_string,
                 # NOTE: This will start reading the eventHub topic from the earliest
                 #  available offset. However, once a checkpoint has been written,
                 #  this configuration will be automatically overwritten by the offsets

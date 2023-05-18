@@ -6,14 +6,15 @@ from xdbutils.datalakehouse import DataLakehouse
 class XDBUtils():
     """ Extended Databricks Utilities """
 
-    def __init__(self, spark):
+    def __init__(self, spark, dbutils):
         self.spark = spark
+        self.dbutils = dbutils
 
 
     @property
     def fs(self):
         """ File system """
-        return FileSystem(self.spark)
+        return FileSystem(self.spark, self.dbutils)
 
     def create_datalakehouse(self, catalog, base_path):
         """ Create data Lake House """
@@ -24,9 +25,9 @@ class FileSystem():
     """ File system """
 
 
-    def __init__(self, spark):
+    def __init__(self, spark, dbutils):
         self.spark = spark
-        self.dbutils = DBUtils(spark)
+        self.dbutils = dbutils
 
     def ls(
             self,
