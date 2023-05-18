@@ -15,14 +15,14 @@ class DataLakehouse():
     TODO: with_hive_catalog(), with_unity_calatog(), with_adsl(), with_awss3()
     """
 
-    def __init__(self, spark, base_catalog, base_path):
+    def __init__(self, spark, base_catalog, raw_path, deltalake_path):
         self.spark = spark
         self.dbutils = DBUtils(spark)
         self.base_catalog = base_catalog
-        self.raw_path = f"{base_path}/raw"
-        self.bronze_path = f"{base_path}/bronze"
-        self.silver_path = f"{base_path}/silver"
-        self.gold_path = f"{base_path}/gold"
+        self.raw_path = raw_path
+        self.bronze_path = f"{deltalake_path}/bronze"
+        self.silver_path = f"{deltalake_path}/silver"
+        self.gold_path = f"{deltalake_path}/gold"
 
     def raw2bronze(self, source_system, entity):
         """ Read raw changes and write to bronze """
