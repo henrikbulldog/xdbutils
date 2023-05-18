@@ -7,6 +7,7 @@ from pyspark.sql import DataFrame
 from pyspark.sql.utils import AnalysisException
 from pyspark.dbutils import DBUtils
 from py4j.protocol import Py4JJavaError
+import logging
 
 class DataLakehouse():
     """ 
@@ -14,10 +15,10 @@ class DataLakehouse():
     TODO: with_hive_catalog(), with_unity_calatog(), with_adsl(), with_awss3()
     """
 
-    def __init__(self, spark, catalog, base_path):
+    def __init__(self, spark, base_catalog, base_path):
         self.spark = spark
         self.dbutils = DBUtils(spark)
-        self.catalog = catalog
+        self.base_catalog = base_catalog
         self.raw_path = f"{base_path}/raw"
         self.bronze_path = f"{base_path}/broze"
         self.silver_path = f"{base_path}/silver"
@@ -27,7 +28,7 @@ class DataLakehouse():
         """ Read raw changes and write to bronze """
         return Raw2BronzeJob(
             spark=self.spark,
-            catalog=f"{self.catalog}_bronze",
+            catalog=f"{self.base_catalog}_bronze",
             source_path=self.raw_path,
             source_system=source_system,
             entity=entity,
@@ -38,7 +39,7 @@ class DataLakehouse():
         """ Read bronze changes and write to silver """
         return Bronze2SilverJob(
             spark=self.spark,
-            catalog=f"{self.catalog}_silver",
+            catalog=f"{self.base_catalog}_silver",
             source_path=self.bronze_path,
             source_system=source_system,
             entity=entity,
@@ -49,7 +50,7 @@ class DataLakehouse():
         """ Read silver changes and write to gold """
         return Silver2GoldJob(
             spark=self.spark,
-            catalog=f"{self.catalog}_gold",
+            catalog=f"{self.base_catalog}_gold",
             source_path=self.silver_path,
             source_system=source_system,
             entity=entity,
@@ -79,6 +80,16 @@ class Job():
         self.spark.conf.set("spark.databricks.delta.merge.enableLowShuffle", "true")
         self.spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
         self.spark.conf.set("spark.databricks.io.cache.enabled", "true")
+
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger.setLevel(logging.DEBUG)
+
+        formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', "%Y-%m-%dT%H:%M:%S")
+        handler = logging.StreamHandler()
+        handler.setFormatter(formatter)
+        if (len(self.logger.handlers) == 0):
+            # Only add handler the first time
+            self.logger.addHandler(handler)
 
     def _get_schema(self, catalog, schema):
         if self.unity_catalog:
@@ -169,6 +180,7 @@ class Job():
         return dataframe
 
     def _write(self, dataframe):
+        self.logger.info(f"Write")
         target_path = f"{self.target_path}/{self.source_system}/{self.target_table}"
         if not self._is_delta_table(target_path):
             self._init_delta_table(
@@ -194,6 +206,7 @@ class Job():
         self.write_callback(dataframe, target_path)
 
     def _merge(self, dataframe, target_path):
+        self.logger.info(f"Merge {target_path}")
         key_condition =  " AND ".join(
             [f"source.{c} <=> target.{c}" for c in self.target_keys])
         # We don't want to update matched row unless any of the values (i.e. column that
@@ -211,6 +224,7 @@ class Job():
         )
 
     def _append(self, dataframe, target_path):
+        self.logger.info(f"Append {target_path}")
         (
             dataframe.write
             .partitionBy(*self.partitions)
@@ -220,6 +234,7 @@ class Job():
          )
 
     def _overwrite(self, dataframe, target_path):
+        self.logger.info(f"Overwrite {target_path}")
         (
             dataframe.write
             .format("delta")
@@ -238,6 +253,7 @@ class Job():
         reader_options = None,
         change_types = None):
         """ Wrapper for getting a stream reader """
+        self.logger.info(f"Get stream reader {source_path}, {source_format}, {checkpoint_location}, {reader_options}")
         if not reader_options:
             reader_options = {}
         if not change_types:
@@ -306,6 +322,7 @@ class Job():
         Delta API does not work correctly with
         Unity Catalog abfss:// paths, hence this function.
         """
+        self.logger.info(f"Is delta table {path}")
         try:
             return (self.spark
                         .sql(f"DESCRIBE DETAIL '{path}'")
@@ -318,6 +335,7 @@ class Job():
 
     def _init_delta_table(self, dataframe, target_path, catalog, schema, table):
         """ Initialize delta table """
+        self.logger.info(f"Init delta table {target_path}, {catalog}, {schema}, {table}")
         (
             dataframe
             .limit(0)
@@ -348,6 +366,7 @@ class Job():
         Function to check if the table cataloging convention is current, 
         i.e. company_env.medallion_source.tablename.
         """
+        self.logger.info(f"Is current catalog structure {catalog}, {schema}, {table}")
         try:
             type(self.spark.table(f"{self._get_schema(catalog, schema)}.{table}"))
             return True
@@ -362,6 +381,7 @@ class Job():
         Changes catalog structure to current if a table exists in old 
         bronze/silver/gold.schema.table -structure
         """
+        self.logger.info(f"Update catalog {target_path}, {catalog}, {table}")
         self.spark.sql(f"CREATE SCHEMA IF NOT EXISTS {self._get_schema(catalog, schema)}")
         self.spark.sql(f"DROP TABLE IF EXISTS {self._get_schema(catalog.split('_')[-1], schema)}.{table}")
         self.spark.sql(f"""
@@ -382,6 +402,7 @@ class Job():
 class Raw2BronzeJob(Job):
     """ Data Lakehouse Medallion raw to bronze job """
     def _batch_handler(self, batch, epoch_id):
+        self.logger.info("Processing epoch %s", epoch_id)
         batch = self._transform(batch)
         batch_to_write = batch.dropDuplicates()
         self._write(batch_to_write)
@@ -389,9 +410,9 @@ class Raw2BronzeJob(Job):
 class Bronze2SilverJob(Job):
     """ Data Lakehouse Medallion bronze to silver job """
     def _batch_handler(self, batch, epoch_id):
-        pass
+        self.logger.info("Processing epoch %s", epoch_id)
 
 class Silver2GoldJob(Job):
     """ Data Lakehouse Medallion silver to gold job """
     def _batch_handler(self, batch, epoch_id):
-        pass
+        self.logger.info("Processing epoch %s", epoch_id)
