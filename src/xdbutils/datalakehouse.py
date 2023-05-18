@@ -117,15 +117,14 @@ class Job():
         Reads source data as stream and passes it to the microbatch handler function.
         Handles stream checkpointing.
         """
-        checkpoint_path = f"{self.source_path}/checkpoints"
         stream = self._get_stream_reader(
             source_path=self.source_path,
             source_format=self.source_format,
-            checkpoint_location=checkpoint_path,
+            checkpoint_location=self.checkpoint_path,
             reader_options=self.source_options)
         stream = (stream
                 .writeStream
-                .option("checkpointLocation", checkpoint_path)
+                .option("checkpointLocation", self.checkpoint_path)
                 .trigger(once=True)
                 .foreachBatch(self._batch_handler)
                 .start()
@@ -183,7 +182,7 @@ class Job():
         self.write_callback = self._overwrite
         self.__run()
 
-    def with_write(self, table, callback: Callable[[DataFrame, str], None]):
+    def write_custom(self, table, callback: Callable[[DataFrame, str], None]):
         """ Custom write, provide a callback with write logic """
         self.target_table = table
         self.write_callback = callback
