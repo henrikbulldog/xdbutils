@@ -26,10 +26,15 @@ class DataLakehouse():
 
     def raw2bronze(self, source_system, entity):
         """ Read raw changes and write to bronze """
+        class_path = f"{source_system}/{entity}"
+        source_path = f"{self.raw_path}/{class_path}"
+        checkpoint_path = f"{self.raw_path}/checkpoints/{class_path}"
+
         return Raw2BronzeJob(
             spark=self.spark,
             catalog=f"{self.base_catalog}_bronze",
-            source_path=self.raw_path,
+            source_path=source_path,
+            checkpoint_path=checkpoint_path,
             source_system=source_system,
             entity=entity,
             target_path=self.bronze_path
@@ -37,10 +42,15 @@ class DataLakehouse():
 
     def bronze2silver(self, source_system, entity):
         """ Read bronze changes and write to silver """
+        class_path = f"{source_system}/{entity}"
+        source_path = f"{self.bronze_path}/{class_path}"
+        checkpoint_path = f"{self.bronze_path}/checkpoints/{class_path}"
+
         return Bronze2SilverJob(
             spark=self.spark,
             catalog=f"{self.base_catalog}_silver",
-            source_path=self.bronze_path,
+            source_path=source_path,
+            checkpoint_path=checkpoint_path,
             source_system=source_system,
             entity=entity,
             target_path=self.silver_path
@@ -48,10 +58,15 @@ class DataLakehouse():
 
     def silver2gold(self, source_system, entity):
         """ Read silver changes and write to gold """
+        class_path = f"{source_system}/{entity}"
+        source_path = f"{self.silver_path}/{class_path}"
+        checkpoint_path = f"{self.silver_path}/checkpoints/{class_path}"
+
         return Silver2GoldJob(
             spark=self.spark,
             catalog=f"{self.base_catalog}_gold",
-            source_path=self.silver_path,
+            source_path=source_path,
+            checkpoint_path=checkpoint_path,
             source_system=source_system,
             entity=entity,
             target_path=self.gold_path
@@ -60,12 +75,13 @@ class DataLakehouse():
 class Job():
     """ Data Lakehouse Medallion stage job """
 
-    def __init__(self, spark, catalog, source_path, source_system, entity, target_path, unity_catalog=True):
+    def __init__(self, spark, catalog, source_path, checkpoint_path, source_system, entity, target_path, unity_catalog=True):
         self.spark = spark
         self.catalog = catalog
         self.source_system = source_system
         self.entity = entity
         self.source_path = source_path
+        self.checkpoint_path = checkpoint_path
         self.target_path = target_path
         self.unity_catalog = unity_catalog
         self.source_options = None
@@ -278,6 +294,7 @@ class Job():
                 "cloudFiles.schemaLocation": checkpoint_location,
                 "cloudFiles.inferColumnTypes": True,
                 "cloudFiles.includeExistingFiles": True,
+                "cloudFiles.schemaEvolutionMode": "addNewColumns",
                 **reader_options
             }
             # Failed to find data source: cloudFiles.
