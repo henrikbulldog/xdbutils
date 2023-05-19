@@ -16,9 +16,9 @@ class XDBUtils():
         """ File system """
         return FileSystem(self.spark, self.dbutils)
 
-    def create_datalakehouse(self, catalog, raw_path, deltalake_path):
+    def create_datalakehouse(self, raw_path, bronze_path, silver_path, gold_path):
         """ Create data Lake House """
-        return DataLakehouse(self.spark, catalog, raw_path, deltalake_path)
+        return DataLakehouse(self.spark, raw_path, bronze_path, silver_path, gold_path)
 
 
 class FileSystem():
