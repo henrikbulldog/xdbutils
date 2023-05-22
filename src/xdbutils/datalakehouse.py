@@ -296,18 +296,14 @@ class Job():
         source_path,
         source_format,
         checkpoint_location,
-        reader_options = None,
-        change_types = None):
+        reader_options = None):
         """ Wrapper for getting a stream reader """
         self._logger.info("Get stream reader %s, %s, %s, %s",
             source_path, source_format, checkpoint_location, reader_options)
         if not reader_options:
             reader_options = {}
-        if not change_types:
-            change_types = ['insert', 'update_postimage']
         if source_format.lower() == 'delta':
             options = {
-                "readChangeFeed": "true",
                 **reader_options
             }
             reader = (self._spark
@@ -315,8 +311,6 @@ class Job():
                         .format("delta")
                         .options(**reader_options)
                         .load(source_path)
-                        # This is now parameterized for custom CDC reader jobs
-                        .where("_change_type IN ('" + "', '".join(change_types) + "')")
                     )
             return reader
         elif source_format.lower() in ["json", "csv", "parquet"]:
