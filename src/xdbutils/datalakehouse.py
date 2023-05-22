@@ -2,17 +2,17 @@
 
 import json
 from typing import Callable
+import logging
 from delta import DeltaTable
-from pyspark.sql import DataFrame
+from pyspark.sql import DataFrame, Window
+from pyspark.sql.functions import col, row_number
 from pyspark.sql.utils import AnalysisException
 from pyspark.dbutils import DBUtils
 from py4j.protocol import Py4JJavaError
-import logging
 
 class DataLakehouse():
     """ 
     Data Lake House 
-    TODO: with_hive_catalog(), with_unity_calatog(), with_adsl(), with_awss3()
     """
 
     def __init__(self, spark, raw_path, bronze_path, silver_path, gold_path):
@@ -23,13 +23,13 @@ class DataLakehouse():
         self._silver_path = silver_path
         self._gold_path = gold_path
 
-    def raw2bronze(self, source_system, entity):
+    def raw2bronze_job(self, source_system, entity):
         """ Read raw changes and write to bronze """
         class_path = f"{source_system}/{entity}"
         source_path = f"{self._raw_path}/{class_path}"
         checkpoint_path = f"{self._raw_path}/checkpoints/{class_path}"
 
-        return Raw2BronzeJob(
+        return Job(
             spark=self._spark,
             source_path=source_path,
             checkpoint_path=checkpoint_path,
@@ -37,27 +37,27 @@ class DataLakehouse():
             target_path=self._bronze_path
             )
 
-    def bronze2silver(self, source_system, entity):
+    def bronze2silver_job(self, source_system, entity):
         """ Read bronze changes and write to silver """
         class_path = f"{source_system}/{entity}"
         source_path = f"{self._bronze_path}/{class_path}"
         checkpoint_path = f"{self._bronze_path}/checkpoints/{class_path}"
 
-        return Bronze2SilverJob(
+        return Job(
             spark=self._spark,
             source_path=source_path,
             checkpoint_path=checkpoint_path,
             source_system=source_system,
             target_path=self._silver_path
-            ).read_from_parquet()
+            ).read_from_parquet().deduplicate()
 
-    def silver2gold(self, source_system, entity):
+    def silver2gold_job(self, source_system, entity):
         """ Read silver changes and write to gold """
         class_path = f"{source_system}/{entity}"
         source_path = f"{self._silver_path}/{class_path}"
         checkpoint_path = f"{self._silver_path}/checkpoints/{class_path}"
 
-        return Silver2GoldJob(
+        return Job(
             spark=self._spark,
             source_path=source_path,
             checkpoint_path=checkpoint_path,
@@ -83,6 +83,9 @@ class Job():
         self._target_table = None
         self._target_keys = None
         self._partitions = []
+        self._do_deduplicate = False
+        self._deduplicate_keys = None
+        self._deduplicate_order_by = None
         self._spark.conf.set("spark.databricks.delta.merge.repartitionBeforeWrite.enabled", "true")
         self._spark.conf.set("spark.databricks.delta.merge.enableLowShuffle", "true")
         self._spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
@@ -94,14 +97,17 @@ class Job():
         formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', "%Y-%m-%dT%H:%M:%S")
         handler = logging.StreamHandler()
         handler.setFormatter(formatter)
-        if (len(self._logger.handlers) == 0):
+        if len(self._logger.handlers) == 0:
             # Only add handler the first time
             self._logger.addHandler(handler)
 
     def _get_schema(self, catalog, schema):
-        return f"{catalog}.{schema}"
+        if catalog:
+            return f"{catalog}.{schema}"
 
-    def __run(self):
+        return schema
+
+    def run(self):
         """
         Reads source data as stream and passes it to the microbatch handler function.
         Handles stream checkpointing.
@@ -145,47 +151,69 @@ class Job():
         self._source_format = "eventhubs"
         return self
 
-    def with_transform(self, callback: Callable[[DataFrame], DataFrame]):
+    def transform(self, callback: Callable[[DataFrame], DataFrame]):
         """ Transform data before writing, provide a callback to do transformation logic """
         self._transform_callback = callback
         return self
+    
+    def deduplicate(self, keys = None, order_by = None):
+        """ Deduplicate """
+        self._do_deduplicate = True
+        self._deduplicate_keys = keys
+        self._deduplicate_order_by = order_by
+        return self
 
-    def write_merge(self, catalog, table, keys):
+    def write_merge(self, table, keys, catalog = None):
         """ Merge changes with existing data, useful with slow changing dimensions """
-        self._catalog = catalog
         self._target_table = table
         self._target_keys = keys
-        self._write_callback = self._merge
-        self.__run()
-
-    def write_append(self, catalog, table, partitions=None):
-        """ Append changes with existing data, useful for timeseries data """
         self._catalog = catalog
+        self._write_callback = self._merge
+        return self
+
+    def write_append(self, table, catalog = None, partitions=None):
+        """ Append changes with existing data, useful for timeseries data """
         self._target_table = table
+        self._catalog = catalog
         if partitions:
             self._partitions = partitions
         self._write_callback = self._append
-        self.__run()
+        return self
 
-    def write_overwrite(self, catalog, table):
+    def write_overwrite(self, table, catalog = None):
         """ Overwrite existing data """
-        self._catalog = catalog
         self._target_table = table
+        self._catalog = catalog
         self._write_callback = self._overwrite
-        self.__run()
+        return self
 
-    def write(self, catalog, table, callback: Callable[[DataFrame, str], None]):
+    def write(self, callback: Callable[[DataFrame, str], None], table, catalog = None):
         """ Custom write, provide a callback with write logic """
-        self._catalog = catalog
-        self._target_table = table
         self._write_callback = callback
-        self.__run()
+        self._target_table = table
+        self._catalog = catalog
+        return self
 
     def _transform(self, dataframe):
         """ Transform before write """
         if self._transform_callback:
             return self._transform_callback(dataframe)
         return dataframe
+
+    def _deduplicate(self, dataframe):
+        """ Deduplicate """
+        if self._deduplicate_keys and self._deduplicate_order_by:
+            window_function = (Window
+                .partitionBy(*self._deduplicate_keys)
+                .orderBy(col(self._deduplicate_order_by).desc())
+            )
+            return (dataframe
+                .withColumn('rank', row_number().over(window_function))
+                .where(col('rank') == 1)
+                .drop('rank')
+            )
+
+        return dataframe.dropDuplicates()
 
     def _write(self, dataframe):
         self._logger.info("Write")
@@ -232,7 +260,7 @@ class Job():
         )
 
     def _append(self, dataframe, target_path):
-        self._logger.info(f"Append {target_path}")
+        self._logger.info("Append %s", target_path)
         (
             dataframe.write
             .partitionBy(*self._partitions)
@@ -242,7 +270,7 @@ class Job():
          )
 
     def _overwrite(self, dataframe, target_path):
-        self._logger.info(f"Overwrite {target_path}")
+        self._logger.info("Overwrite %s", target_path)
         (
             dataframe.write
             .format("delta")
@@ -251,7 +279,11 @@ class Job():
          )
 
     def _batch_handler(self, batch, epoch_id):
-        pass
+        self._logger.info("Processing epoch %s", epoch_id)
+        batch = self._transform(batch)
+        if self._do_deduplicate:
+            batch = self._deduplicate(batch)
+        self._write(batch)
 
     def _get_stream_reader(
         self,
@@ -261,7 +293,8 @@ class Job():
         reader_options = None,
         change_types = None):
         """ Wrapper for getting a stream reader """
-        self._logger.info(f"Get stream reader {source_path}, {source_format}, {checkpoint_location}, {reader_options}")
+        self._logger.info("Get stream reader %s, %s, %s, %s",
+            source_path, source_format, checkpoint_location, reader_options)
         if not reader_options:
             reader_options = {}
         if not change_types:
@@ -331,7 +364,7 @@ class Job():
         Delta API does not work correctly with
         Unity Catalog abfss:// paths, hence this function.
         """
-        self._logger.info(f"Is delta table {path}")
+        self._logger.info("Is delta table %s", path)
         try:
             return (self._spark
                         .sql(f"DESCRIBE DETAIL '{path}'")
@@ -344,7 +377,7 @@ class Job():
 
     def _init_delta_table(self, dataframe, target_path, catalog, schema, table):
         """ Initialize delta table """
-        self._logger.info(f"Init delta table {target_path}, {catalog}, {schema}, {table}")
+        self._logger.info("Init delta table %s, %s, %s. %s", target_path, catalog, schema, table)
         (
             dataframe
             .limit(0)
@@ -375,7 +408,7 @@ class Job():
         Function to check if the table cataloging convention is current, 
         i.e. company_env.medallion_source.tablename.
         """
-        self._logger.info(f"Is current catalog structure {catalog}, {schema}, {table}")
+        self._logger.info("Is current catalog structure %s, %s, %s", catalog, schema, table)
         try:
             type(self._spark.table(f"{self._get_schema(catalog, schema)}.{table}"))
             return True
@@ -390,7 +423,7 @@ class Job():
         Changes catalog structure to current if a table exists in old 
         bronze/silver/gold.schema.table -structure
         """
-        self._logger.info(f"Update catalog {target_path}, {catalog}, {table}")
+        self._logger.info("Update catalog %s, %s, %s", target_path, catalog, table)
         self._spark.sql(f"CREATE SCHEMA IF NOT EXISTS {self._get_schema(catalog, schema)}")
         self._spark.sql(f"DROP TABLE IF EXISTS {self._get_schema(catalog.split('_')[-1], schema)}.{table}")
         self._spark.sql(f"""
@@ -407,21 +440,3 @@ class Job():
         ALTER TABLE {self._get_schema(catalog, schema)}.{table}
         SET TBLPROPERTIES ({','.join(default_table_properties)})
         """)
-
-class Raw2BronzeJob(Job):
-    """ Data Lakehouse Medallion raw to bronze job """
-    def _batch_handler(self, batch, epoch_id):
-        self._logger.info("Processing epoch %s", epoch_id)
-        batch = self._transform(batch)
-        batch_to_write = batch.dropDuplicates()
-        self._write(batch_to_write)
-
-class Bronze2SilverJob(Job):
-    """ Data Lakehouse Medallion bronze to silver job """
-    def _batch_handler(self, batch, epoch_id):
-        self._logger.info("Processing epoch %s", epoch_id)
-
-class Silver2GoldJob(Job):
-    """ Data Lakehouse Medallion silver to gold job """
-    def _batch_handler(self, batch, epoch_id):
-        self._logger.info("Processing epoch %s", epoch_id)

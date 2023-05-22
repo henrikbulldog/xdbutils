@@ -31,16 +31,18 @@ df = (
 df.show(truncate=False)
 
 
-datalakehouse = ( 
-    xdbutils.create_datalakehouse(
+datalakehouse = xdbutils.create_datalakehouse(
         raw_path=f"dbfs:/FileStore/{current_user}/datalakehouse/raw",
-        bronze_path=f"dbfs:/FileStore/{current_user}/datalakehouse/deltalake/bronze",
-        silver_path=f"dbfs:/FileStore/{current_user}/datalakehouse/deltalake/silver",
-        gold_path=f"dbfs:/FileStore/{current_user}/datalakehouse/deltalake/gold",
+        bronze_path=f"abfss:/<bronze path>",
+        silver_path=f"abfss:/<silver path>",
+        gold_path=f"abfss:/<gold path>",
     )
-    .raw2bronze("eds", "co2emis")
+
+job = (
+    datalakehouse
+    .raw2bronze_job("eds", "co2emis")
     .read_from_json(options={"multiline": True})
-    .with_transform(lambda df: (
+    .transform(lambda df: (
         df.withColumn("record", explode("records"))
         .select(
             "record.CO2Emission",
@@ -49,7 +51,5 @@ datalakehouse = (
             )
         )
     )
+    .write_append(catalog=f"{current_user}_bronze", table=source_entity)
 )
-
-# Streamming not supported on remote client
-# datalakehouse.write_append(catalog=f"{current_user}_bronze", table=source_entity)
