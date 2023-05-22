@@ -49,7 +49,7 @@ class DataLakehouse():
             checkpoint_path=checkpoint_path,
             source_system=source_system,
             target_path=self._silver_path
-            ).read_from_parquet().deduplicate()
+            ).read_from_delta().deduplicate()
 
     def silver2gold_job(self, source_system, entity):
         """ Read silver changes and write to gold """
@@ -63,7 +63,7 @@ class DataLakehouse():
             checkpoint_path=checkpoint_path,
             source_system=source_system,
             target_path=self._gold_path
-            ).read_from_parquet()
+            ).read_from_delta()
 
 class Job():
     """ Data Lakehouse Medallion stage job """
@@ -142,6 +142,12 @@ class Job():
         """ Read parquet files """
         self._source_options = options
         self._source_format = "parquet"
+        return self
+
+    def read_from_delta(self, options=None):
+        """ Read delta tables """
+        self._source_options = options
+        self._source_format = "delta"
         return self
 
     def read_from_eventhub(self, connection_string, options=None):
