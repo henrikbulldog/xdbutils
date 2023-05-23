@@ -1,7 +1,8 @@
 """ Package xdbutils """
 
-from pyspark.dbutils import DBUtils
+from pyspark.sql import DataFrame
 from xdbutils.datalakehouse import DataLakehouse
+from xdbutils.transforms import scd2
 
 class XDBUtils():
     """ Extended Databricks Utilities """
@@ -10,20 +11,41 @@ class XDBUtils():
         self.spark = spark
         self.dbutils = dbutils
 
-
     @property
     def fs(self):
         """ File system """
         return FileSystem(self.spark, self.dbutils)
+
+    @property
+    def transforms(self):
+        """ Transforms """
+        return Transforms(self.spark)
 
     def create_datalakehouse(self, raw_path, bronze_path, silver_path, gold_path):
         """ Create data Lake House """
         return DataLakehouse(self.spark, raw_path, bronze_path, silver_path, gold_path)
 
 
+class Transforms():
+    """ Transforms """
+
+    def __init__(self, spark):
+        self.spark = spark
+
+    def update_slow_changing_dimension_type2(
+        self,
+        current_data_df: DataFrame,
+        key_columns: list[str],
+        latest_version_df: DataFrame = None,
+        handle_deletions: bool = False,
+        value_columns: list[str] = None,
+    ) -> DataFrame:
+        """ Calculate the changes in a slow changing dimension type 2 """
+        return scd2.diff(self.spark, current_data_df, key_columns, latest_version_df, handle_deletions, value_columns)
+
+
 class FileSystem():
     """ File system """
-
 
     def __init__(self, spark, dbutils):
         self.spark = spark
@@ -41,7 +63,7 @@ class FileSystem():
         try:
             files = self.dbutils.fs.ls(path)
         except:
-            print("Not found: " + path)
+            lines.append("Not found: " + path)
             return lines
         file_count = 0
         file_size = 0

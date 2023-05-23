@@ -1,13 +1,11 @@
 """ Unit tests """
 
 import unittest
-from pyspark.sql import SparkSession
+from databricks.connect import DatabricksSession
 from pyspark.sql.functions import to_timestamp, lit, col
-
 from xdbutils.transforms import scd2
 
-spark = SparkSession.builder.getOrCreate()
-
+spark = DatabricksSession.builder.getOrCreate()
 
 class TransformsScdTestCase(unittest.TestCase):
     """ Test Batch """
@@ -15,19 +13,19 @@ class TransformsScdTestCase(unittest.TestCase):
     def test_diff_first(self):
         """ Test transforms.scd.diff without existing history data """
 
-        current_data_df = spark.sparkContext.parallelize([
+        current_data_df = spark.createDataFrame([
                 (1, "Allan Adams"),
                 (2, "Beatrice Bolton"),
-            ]).toDF(["id", "name"])
+            ], ["id", "name"])
 
-        result_df = scd2.diff(current_data_df, ["id"])
+        result_df = scd2.diff(spark, current_data_df, ["id"])
 
         result_df.show(truncate=False)
 
-        expected_df = spark.sparkContext.parallelize([
+        expected_df = spark.createDataFrame([
                 (1, "Allan Adams", "i"),
                 (2, "Beatrice Bolton","i"),
-            ]).toDF(["id", "name", "meta_action"])
+            ], ["id", "name", "meta_action"])
 
         result_harmonized_df = result_df \
             .select("id", "name", "meta_action") \
@@ -39,22 +37,23 @@ class TransformsScdTestCase(unittest.TestCase):
     def test_diff_update(self):
         """ Test transforms.scd.diff """
 
-        current_data_df = spark.sparkContext.parallelize([
+        current_data_df = spark.createDataFrame([
                 (1, "Allan Adams"),
                 (2, "Beatrice Bolton"),
-            ]).toDF(["id", "name"])
+            ], ["id", "name"])
 
-        first_diff_df = scd2.diff(current_data_df, ["id"])
-        latest_version_df = spark.sparkContext.parallelize(first_diff_df.collect()).toDF()
+        first_diff_df = scd2.diff(spark, current_data_df, ["id"])
+        latest_version_df = spark.createDataFrame(first_diff_df.collect())
 
         latest_version_df.show(truncate=False)
 
-        current_data_updated_df = spark.sparkContext.parallelize([
+        current_data_updated_df = spark.createDataFrame([
                 (2, "Beatrice Adams"),
                 (3, "Camillla Adams"),
-            ]).toDF(["id", "name"]).cache()
+            ], ["id", "name"])
 
         result_df = scd2.diff(
+            spark,
             current_data_df=current_data_updated_df,
             key_columns= ["id"],
             latest_version_df= latest_version_df,
@@ -62,11 +61,11 @@ class TransformsScdTestCase(unittest.TestCase):
 
         result_df.show(truncate=False)
 
-        expected_df = spark.sparkContext.parallelize([
+        expected_df = spark.createDataFrame([
                 (1, "Allan Adams", "d"),
                 (2, "Beatrice Adams","u"),
                 (3, "Camillla Adams", "i"),
-            ]).toDF(["id", "name", "meta_action"])
+            ], ["id", "name", "meta_action"])
 
         result_latest_df = result_df \
             .select("id", "name", "meta_action") \

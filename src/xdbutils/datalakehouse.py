@@ -29,7 +29,7 @@ class DataLakehouse():
         source_path = f"{self._raw_path}/{class_path}"
         checkpoint_path = f"{self._raw_path}/checkpoints/{class_path}"
 
-        return Job(
+        return RawJob(
             spark=self._spark,
             source_path=source_path,
             checkpoint_path=checkpoint_path,
@@ -126,35 +126,10 @@ class Job():
                 )
         stream.awaitTermination()
 
-    def read_from_json(self, options=None):
-        """ Read json files """
-        self._source_options = options
-        self._source_format = "json"
-        return self
-
-    def read_from_csv(self, options=None):
-        """ Read csv files """
-        self._source_options = options
-        self._source_format = "csv"
-        return self
-
-    def read_from_parquet(self, options=None):
-        """ Read parquet files """
-        self._source_options = options
-        self._source_format = "parquet"
-        return self
-
     def read_from_delta(self, options=None):
         """ Read delta tables """
         self._source_options = options
         self._source_format = "delta"
-        return self
-
-    def read_from_eventhub(self, connection_string, options=None):
-        """ Subscribe to event hub """
-        self._source_options = options
-        self._source_connection_string = connection_string
-        self._source_format = "eventhubs"
         return self
 
     def transform(self, callback: Callable[[DataFrame], DataFrame]):
@@ -302,7 +277,7 @@ class Job():
             source_path, source_format, checkpoint_location, reader_options)
         if not reader_options:
             reader_options = {}
-        if source_format.lower() == 'delta':
+        if source_format.lower() == "delta":
             options = {
                 **reader_options
             }
@@ -440,3 +415,31 @@ class Job():
         ALTER TABLE {self._get_schema(catalog, schema)}.{table}
         SET TBLPROPERTIES ({','.join(default_table_properties)})
         """)
+
+class RawJob(Job):
+    """ Raw to bronze job """
+
+    def read_from_json(self, options=None):
+        """ Read json files """
+        self._source_options = options
+        self._source_format = "json"
+        return self
+
+    def read_from_csv(self, options=None):
+        """ Read csv files """
+        self._source_options = options
+        self._source_format = "csv"
+        return self
+
+    def read_from_parquet(self, options=None):
+        """ Read parquet files """
+        self._source_options = options
+        self._source_format = "parquet"
+        return self
+
+    def read_from_eventhub(self, connection_string, options=None):
+        """ Subscribe to event hub """
+        self._source_options = options
+        self._source_connection_string = connection_string
+        self._source_format = "eventhubs"
+        return self

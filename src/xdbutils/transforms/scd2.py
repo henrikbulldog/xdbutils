@@ -1,15 +1,13 @@
 """ Slowly changing dimension type 2 transfromations """
 
-from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql import DataFrame
 from pyspark.sql.functions import md5, isnull \
     ,col, when, concat_ws, current_timestamp, to_timestamp, lit
 from pyspark.sql.types import StructType, StructField, TimestampType, StringType
 
 
-spark = SparkSession.builder.getOrCreate()
-
-
-def diff(current_data_df: DataFrame,
+def diff(spark, 
+         current_data_df: DataFrame,
          key_columns: list[str],
          latest_version_df: DataFrame = None,
          handle_deletions: bool = False,
@@ -18,7 +16,7 @@ def diff(current_data_df: DataFrame,
     """ Calculate the changes in a slow changing dimension type 2 """
 
     if latest_version_df is None:
-        latest_version_df = __get_empty(current_data_df)
+        latest_version_df = __get_empty(spark, current_data_df)
 
     if value_columns is None:
         all_columns = [f.name for f in  current_data_df.schema.fields]
@@ -63,14 +61,14 @@ def diff(current_data_df: DataFrame,
             .withColumn("meta_valid_from", current_timestamp()) \
             .withColumn("meta_valid_to", to_timestamp(lit("9999-12-31")))
     else:
-        deletions_df = __get_empty(current_data_df)
+        deletions_df = __get_empty(spark, current_data_df)
 
     return __harmonize(inserts_and_updates_df, key_columns, value_columns) \
         .union(__harmonize(deletions_df, key_columns, value_columns)) \
         .union(__harmonize(obsoletions_df, key_columns, value_columns))
 
 
-def __get_empty(current_data_df: DataFrame) -> DataFrame:
+def __get_empty(spark, current_data_df: DataFrame) -> DataFrame:
     """ Creates an empty slow changing dimension type 2 """
 
     schema = StructType(current_data_df.schema.fields + 
