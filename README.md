@@ -86,15 +86,16 @@ bronze2silver_job = (
   .write_append(table=source_entity, catalog="dev_helen_silver")
 
 bronze2silver_job.run()    
-)```
-
+)
+```
 
 # Using Databricks Connect
 See https://learn.microsoft.com/en-us/azure/databricks/dev-tools/databricks-connect
 
 Install Docker.
-Set environment variables onm your local machine:
+Set environment variables on your local machine:
 DATABRICKS_HOST=https://<Databricks instance host url>
 DATABRICKS_TOKEN=<Databricks token from user settings>
 DATABRICKS_CLUSTER_ID=<Databricks cluster ID>
 
+Databricks cluster runtime must be  Databricks Runtime 13.0 or 13.0 ML.
