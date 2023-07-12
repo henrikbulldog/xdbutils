@@ -2,6 +2,7 @@
 
 from pyspark.sql import DataFrame
 from xdbutils.datalakehouse import DataLakehouse
+from xdbutils.pipelines import Pipeline
 from xdbutils.transforms import scd2
 
 class XDBUtils():
@@ -24,6 +25,10 @@ class XDBUtils():
     def create_datalakehouse(self, raw_path, bronze_path, silver_path, gold_path):
         """ Create data Lake House """
         return DataLakehouse(self.spark, raw_path, bronze_path, silver_path, gold_path)
+
+    def create_pipeline(self, source_system, entity, raw_base_path):
+        """ Create Delta Live Tables Pipeline """
+        return Pipeline(source_system, entity, raw_base_path)
 
 
 class Transforms():
