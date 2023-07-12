@@ -8,18 +8,18 @@ import dlt  # pylint: disable=import-error
 class Pipeline():
     """ Delta Live Tables Pipeline """
 
-    def __init__(self, raw_base_path):
-        self._raw_base_path = raw_base_path
+    def __init__(self):
 
     def raw_to_bronze(self,
         source_system,
         entity,
+        raw_base_path,
         load: Callable[[str], DataFrame],
         transform: Callable[[DataFrame], DataFrame] = None):
         """ Raw to bronze """
 
         class_path = f"{source_system}/{entity}"
-        source_path = f"{self._raw_base_path}/{class_path}"
+        source_path = f"{raw_base_path}/{class_path}"
 
         @dlt.table(
             comment=f"Raw to Bronze, {source_system}.{entity}",
