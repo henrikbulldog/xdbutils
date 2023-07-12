@@ -47,3 +47,23 @@ class Pipeline():
             if transform:
                 df = transform(df)
             return df
+
+    def silver_to_gold(
+        self,
+        name,
+        source_system,
+        entity,
+        transform: Callable[[DataFrame], DataFrame] = None,
+        expectations={}):
+        """ Bronze to Silver """
+
+        @dlt.table(
+            comment=f"Silver to Gold, {source_system}.{entity}_{name}",
+            name=f"gold_{entity}_{name}"
+        )
+        @dlt.expect_all(expectations)
+        def silver_to_gold_table():
+            df = dlt.read(f"silver_{entity}")
+            if transform:
+                df = transform(df)
+            return df
