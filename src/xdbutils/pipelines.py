@@ -22,7 +22,7 @@ class Pipeline():
         source_path = f"{self._raw_base_path}/{class_path}"
 
         @dlt.table(
-            comment=f"Raw to bronze, {self._source_system}.{self._entity}",
+            comment=f"Raw to Bronze, {self._source_system}.{self._entity}",
             name=f"bronze_{self._entity}"
         )
         def raw_to_bronze_table():
@@ -38,7 +38,8 @@ class Pipeline():
         """ Bronze to Silver """
 
         @dlt.table(
-            comment="Wikipedia clickstream data cleaned and prepared for analysis."
+            comment=f"Bronze to Silver, {self._source_system}.{self._entity}",
+            name=f"silver_{self._entity}"
         )
         @dlt.expect_all(expectations)
         def bronze_to_silver_table():
