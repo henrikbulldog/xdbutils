@@ -26,7 +26,23 @@ class Pipeline():
             name=f"bronze_{self._entity}"
         )
         def raw_to_bronze_table():
-            raw_df = load(source_path)
+            df = load(source_path)
             if transform:
-                raw_df = transform(raw_df)
-            return raw_df
+                df = transform(df)
+            return df
+
+    def bronze_to_silver(
+        self,
+        transform: Callable[[DataFrame], DataFrame] = None,
+        expectations={"valid_count": "count > 0"}):
+        """ Bronze to Silver """
+
+        @dlt.table(
+            comment="Wikipedia clickstream data cleaned and prepared for analysis."
+        )
+        @dlt.expect_all(expectations)
+        def bronze_to_silver_table():
+            df = dlt.read(f"bronze_{self._entity}")
+            if transform:
+                df = transform(df)
+            return df
