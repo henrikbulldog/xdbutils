@@ -11,21 +11,24 @@ class XDBUtils():
     def __init__(self, spark, dbutils):
         self.spark = spark
         self.dbutils = dbutils
+        self._fs = FileSystem(self.spark, self.dbutils)
+        self._pipeline = Pipeline()
+        self._transforms = Transforms(self.spark)
 
     @property
     def fs(self):
         """ File system """
-        return FileSystem(self.spark, self.dbutils)
+        return self._fs
 
     @property
     def pipeline(self):
         """ Delta Live Tables Pipeline """
-        return Pipeline()
+        return self._pipeline
 
     @property
     def transforms(self):
         """ Transforms """
-        return Transforms(self.spark)
+        return self._transforms
 
     def create_datalakehouse(self, raw_path, bronze_path, silver_path, gold_path):
         """ Create data Lake House """
