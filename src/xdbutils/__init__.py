@@ -18,6 +18,11 @@ class XDBUtils():
         return FileSystem(self.spark, self.dbutils)
 
     @property
+    def pipeline(self):
+        """ Delta Live Tables Pipeline """
+        return Pipeline()
+
+    @property
     def transforms(self):
         """ Transforms """
         return Transforms(self.spark)
@@ -25,10 +30,6 @@ class XDBUtils():
     def create_datalakehouse(self, raw_path, bronze_path, silver_path, gold_path):
         """ Create data Lake House """
         return DataLakehouse(self.spark, raw_path, bronze_path, silver_path, gold_path)
-
-    def create_pipeline(self, source_system, entity, raw_base_path):
-        """ Create Delta Live Tables Pipeline """
-        return Pipeline(source_system, entity, raw_base_path)
 
 
 class Transforms():
