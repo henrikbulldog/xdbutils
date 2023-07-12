@@ -34,7 +34,7 @@ class Pipeline():
     def bronze_to_silver(
         self,
         transform: Callable[[DataFrame], DataFrame] = None,
-        expectations={"valid_count": "count > 0"}):
+        expectations={}):
         """ Bronze to Silver """
 
         @dlt.table(
