@@ -8,22 +8,22 @@ import dlt  # pylint: disable=import-error
 class Pipeline():
     """ Delta Live Tables Pipeline """
 
-    def __init__(self, source_system, entity, raw_base_path):
-        self._source_system = source_system
-        self._entity = entity
+    def __init__(self, raw_base_path):
         self._raw_base_path = raw_base_path
 
     def raw_to_bronze(self,
-                      load: Callable[[str], DataFrame],
-                      transform: Callable[[DataFrame], DataFrame] = None):
+        source_system,
+        entity,
+        load: Callable[[str], DataFrame],
+        transform: Callable[[DataFrame], DataFrame] = None):
         """ Raw to bronze """
 
-        class_path = f"{self._source_system}/{self._entity}"
+        class_path = f"{source_system}/{entity}"
         source_path = f"{self._raw_base_path}/{class_path}"
 
         @dlt.table(
-            comment=f"Raw to Bronze, {self._source_system}.{self._entity}",
-            name=f"bronze_{self._entity}"
+            comment=f"Raw to Bronze, {source_system}.{entity}",
+            name=f"bronze_{entity}"
         )
         def raw_to_bronze_table():
             df = load(source_path)
@@ -33,17 +33,19 @@ class Pipeline():
 
     def bronze_to_silver(
         self,
+        source_system,
+        entity,
         transform: Callable[[DataFrame], DataFrame] = None,
         expectations={}):
         """ Bronze to Silver """
 
         @dlt.table(
-            comment=f"Bronze to Silver, {self._source_system}.{self._entity}",
-            name=f"silver_{self._entity}"
+            comment=f"Bronze to Silver, {source_system}.{entity}",
+            name=f"silver_{entity}"
         )
         @dlt.expect_all(expectations)
         def bronze_to_silver_table():
-            df = dlt.read(f"bronze_{self._entity}")
+            df = dlt.read(f"bronze_{entity}")
             if transform:
                 df = transform(df)
             return df
