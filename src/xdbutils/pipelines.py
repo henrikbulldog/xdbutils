@@ -1,12 +1,17 @@
 """ Delta Live Tables Pipelines """
 
+import json
 from typing import Callable
 from pyspark.sql import DataFrame
+from pyspark.dbutils import DBUtils
 import dlt  # pylint: disable=import-error
 
 
 class Pipeline():
     """ Delta Live Tables Pipeline """
+
+    def __init__(self, spark):
+        self._dbutils = DBUtils(spark)
 
     def raw_to_bronze(
         self,
@@ -62,3 +67,38 @@ class Pipeline():
             if transform:
                 df = transform(df)
             return df
+
+    def create_workflow_settings(
+        self,
+        source_system,
+        entity,
+        catalog,
+        source_path
+        ):
+        """ Create Delta Live Tables Workflow settings """
+
+        return json.dumps({
+        "name": f"{source_system}-{entity}",
+        "edition": "Advanced",
+        "development": True,
+        "clusters": [
+            {
+            "label": "default",
+            "autoscale": {
+                "min_workers": 1,
+                "max_workers": 5,
+                "mode": "ENHANCED"
+            }
+            }
+        ],
+        "libraries": [
+            {
+            "notebook": {
+                "path": source_path
+            }
+            }
+        ],
+        "catalog": catalog,
+        "target": f"{source_system}_{entity}",
+        "continuous": False
+        }, indent=2)
