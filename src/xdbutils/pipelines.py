@@ -10,9 +10,6 @@ import dlt  # pylint: disable=import-error
 class Pipeline():
     """ Delta Live Tables Pipeline """
 
-    def __init__(self, spark):
-        self._dbutils = DBUtils(spark)
-
     def raw_to_bronze(
         self,
         source_system,
