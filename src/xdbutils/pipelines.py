@@ -1,5 +1,6 @@
 """ Delta Live Tables Pipelines """
 
+import requests
 import json
 from typing import Callable
 from pyspark.sql import DataFrame
@@ -99,3 +100,51 @@ class Pipeline():
         "target": f"{source_system}_{entity}",
         "continuous": False
         }, indent=2)
+
+
+    def create_workflow(
+        self,
+        source_system,
+        entity,
+        catalog,
+        source_path,
+        databricks_host,
+        databricks_token
+        ):
+        """ Create Delta Live Tables Workflow """
+
+        workflow_settings = {
+            "name": f"{source_system}-{entity}",
+            "edition": "Advanced",
+            "development": True,
+            "clusters": [
+                {
+                "label": "default",
+                "autoscale": {
+                    "min_workers": 1,
+                    "max_workers": 5,
+                    "mode": "ENHANCED"
+                }
+                }
+            ],
+            "libraries": [
+                {
+                "notebook": {
+                    "path": source_path
+                }
+                }
+            ],
+            "catalog": catalog,
+            "target": f"{source_system}_{entity}",
+            "continuous": False
+        }
+
+        url = f"https://${databricks_host}/api/2.0/pipelines"
+
+        response = requests.post(
+            url=url,
+            json=workflow_settings,
+            headers={"Authorization": f"Bearer ${databricks_token}"}
+            )
+        
+        response.raise_for_status()
