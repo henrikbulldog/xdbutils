@@ -99,7 +99,7 @@ class Pipeline():
                 }
             ],
             "catalog": catalog,
-            "target": f"{source_system}_{entity}",
+            "target": source_system,
             "continuous": False
         }
 
