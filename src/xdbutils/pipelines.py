@@ -15,7 +15,7 @@ class Pipeline():
         self,
         source_system,
         entity,
-        raw_df: DataFrame
+        raw_data
         ):
         """ Raw to bronze """
 
@@ -24,7 +24,7 @@ class Pipeline():
             name=f"bronze_{entity}"
         )
         def raw_to_bronze_table():
-            return raw_df
+            return raw_data
 
     def bronze_to_silver(
         self,
