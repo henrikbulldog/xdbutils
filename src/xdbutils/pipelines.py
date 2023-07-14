@@ -139,12 +139,12 @@ class Pipeline():
             "continuous": False
         }
 
-        url = f"https://${databricks_host}/api/2.0/pipelines"
+        url = f"https://{databricks_host}/api/2.0/pipelines"
 
         response = requests.post(
             url=url,
             json=workflow_settings,
-            headers={"Authorization": f"Bearer ${databricks_token}"}
+            headers={"Authorization": f"Bearer {databricks_token}"}
             )
         
         response.raise_for_status()
