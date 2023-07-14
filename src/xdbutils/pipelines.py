@@ -66,42 +66,6 @@ class Pipeline():
                 df = transform(df)
             return df
 
-    def create_workflow_settings(
-        self,
-        source_system,
-        entity,
-        catalog,
-        source_path
-        ):
-        """ Create Delta Live Tables Workflow settings """
-
-        return json.dumps({
-        "name": f"{source_system}-{entity}",
-        "edition": "Advanced",
-        "development": True,
-        "clusters": [
-            {
-            "label": "default",
-            "autoscale": {
-                "min_workers": 1,
-                "max_workers": 5,
-                "mode": "ENHANCED"
-            }
-            }
-        ],
-        "libraries": [
-            {
-            "notebook": {
-                "path": source_path
-            }
-            }
-        ],
-        "catalog": catalog,
-        "target": f"{source_system}_{entity}",
-        "continuous": False
-        }, indent=2)
-
-
     def create_workflow(
         self,
         source_system,
@@ -139,12 +103,11 @@ class Pipeline():
             "continuous": False
         }
 
-        url = f"https://{databricks_host}/api/2.0/pipelines"
-
         response = requests.post(
-            url=url,
+            url=f"https://{databricks_host}/api/2.0/pipelines",
             json=workflow_settings,
-            headers={"Authorization": f"Bearer {databricks_token}"}
+            headers={"Authorization": f"Bearer {databricks_token}"},
+            timeout=60
             )
-        
+
         response.raise_for_status()
