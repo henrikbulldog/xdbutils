@@ -21,20 +21,18 @@ Read and transform raw data using pyspark. Call XDBUtils.pipelines.raw_to_bronze
 ```
 from pyspark.sql.functions import explode, col, lit
 
-raw_df = (
-  spark
-  .read
-  .option("multiline", True)
-  .json(f"{raw_path}/{source_system}/{entity}")
-  .withColumn("record", explode("records"))
-  .select("record.*")
-)
-
 xdbutils.pipeline.raw_to_bronze(
   source_system=source_system,
   entity=entity,
-  raw_df=raw_df
+  raw_data=(
+    spark
+    .read
+    .option("multiline", True)
+    .json(f"{raw_path}/{source_system}/{entity}")
+    .withColumn("record", explode("records"))
+    .select("record.*")
   )
+)
 ```
 This will create the table <catalog>.<source system>.bronze_<entity>, for example testing_dlt.eds.bronze_co2emis.
 
