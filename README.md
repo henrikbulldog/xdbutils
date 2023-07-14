@@ -10,6 +10,93 @@ The package is built for Databricks runtime 13.0 or higher.
 %pip install install git+https://github.com/henrikbulldog/xdputils.git
 ```
 
+# Using the Delta Live Tables (DLT) Framework
+The framework sets up a Delta Live Tables pipeline that conforms to the medallion (bronze-silver-gold) data pipeline strategy by exposing 3 methods:
+- XDBUtils.pipelines.raw_to_bronze()
+- XDBUtils.pipelines.bronze_to_silver()
+- XDBUtils.pipelines.silver_to_gold()
+
+## Raw to bronze
+Read and transform raw data using pyspark. Call XDBUtils.pipelines.raw_to_bronze() with source system, entity and raw data DataFrame:
+```
+from pyspark.sql.functions import explode, col, lit
+
+raw_df = (
+  spark
+  .read
+  .option("multiline", True)
+  .json(f"{raw_path}/{source_system}/{entity}")
+  .withColumn("record", explode("records"))
+  .select("record.*")
+)
+
+xdbutils.pipeline.raw_to_bronze(
+  source_system=source_system,
+  entity=entity,
+  raw_df=raw_df
+  )
+```
+This will create the table <catalog>.<source system>.bronze_<entity>, for example testing_dlt.eds.bronze_co2emis.
+
+## Bronze to Silver
+Call XDBUtils.pipelines.bronze_to_silver() with source system, entity, bronze to silver transformation method and expectations:
+
+```
+xdbutils.pipeline.bronze_to_silver(
+  source_system=source_system,
+  entity=entity,
+  transform=lambda df: (
+    df
+    .select(
+      col("CO2Emission").alias("value"),
+      col("Minutes5UTC").cast("timestamp").alias("timestamp"),
+      col("PriceArea").alias("price_area"),
+      )
+    ),
+  expectations={
+    "valid_timestamp": "timestamp IS NOT NULL",
+    "valid_value": "value IS NOT NULL"
+    }
+  )
+```
+This will create the table <catalog>.<source system>.silver_<entity>, for example testing_dlt.eds.silver_co2emis.
+
+## Silver to Gold
+Call XDBUtils.pipelines.silver_to_gold() with name, source system, entity and silver to gold transformation method:
+
+```
+xdbutils.pipeline.silver_to_gold(
+  name="top_10",
+  source_system=source_system,
+  entity=entity,
+  transform=lambda df: (
+    df
+      .where(col("price_area") == lit("DK1"))
+      .orderBy(col("value").desc())
+      .limit(10)
+      .select("value", "timestamp")
+  )
+)
+```
+This will create the table <catalog>.<source system>.gold_<entity>_<name>, for example testing_dlt.eds.gold_co2emis_top_10.
+
+## Create Workflow
+Create a Delta Live Tables workflow by calling XDBUtils.pipelines.create_worflow() with source system, entity, unity catalog name, source path (i.e. path to notebook or python file ion repo), databricks host and databricks token:
+
+```
+path_to_current_notebook = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+current_databricks_host = dbutils.notebook.entry_point.getDbutils().notebook().getContext().tags().get("browserHostName").get()
+
+workflow_settings = xdbutils.pipeline.create_workflow(
+  source_system=source_system,
+  entity=entity,
+  catalog="testing_dlt",
+  source_path=path_to_current_notebook,
+  databricks_host=current_databricks_host,
+  databricks_token=dbutils.secrets().get(scope="<scope>", key="<key>")
+)
+```
+
 # Using the Data Lakehouse Framework
 
 Copy data to raw:
