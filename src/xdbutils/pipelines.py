@@ -33,7 +33,7 @@ class Pipeline():
         transform: Callable[[DataFrame], DataFrame] = None,
         expectations={}
         ):
-        """ Bronze to Silver """
+        """ Bronze to Silver, append-only """
 
         @dlt.table(
             comment=f"Bronze to Silver, {source_system}.{entity}",
@@ -45,6 +45,37 @@ class Pipeline():
             if transform:
                 df = transform(df)
             return df
+        
+    def bronze_to_silver_upsert(
+        self,
+        source_system,
+        entity,
+        keys,
+        sequence_by,
+        transform: Callable[[DataFrame], DataFrame] = None,
+        expectations={}
+    ):
+        """ Bronze to Silver, upsert """
+
+        @dlt.view(name=f"view_silver_{entity}")
+        @dlt.expect_all(expectations)
+        def view_silver_clickstream():
+            df = dlt.read(f"bronze_{entity}")
+            if transform:
+                df = transform(df)
+            return df
+
+        dlt.create_streaming_table(
+            name=f"silver_{entity}",
+            comment=f"Bronze to Silver, {source_system}.{entity}",
+            )
+
+        dlt.apply_changes(
+            target=f"silver_{entity}",
+            source=f"view_silver_{entity}",
+            keys=keys,
+            sequence_by=sequence_by
+            )
 
     def silver_to_gold(
         self,
