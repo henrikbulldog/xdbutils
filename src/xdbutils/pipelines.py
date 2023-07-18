@@ -1,10 +1,9 @@
 """ Delta Live Tables Pipelines """
 
-import requests
-import json
 from typing import Callable
+import requests
 from pyspark.sql import DataFrame
-from pyspark.dbutils import DBUtils
+from pyspark.sql.functions import col
 import dlt  # pylint: disable=import-error
 
 
@@ -60,7 +59,8 @@ class Pipeline():
         @dlt.view(name=f"view_silver_{entity}")
         @dlt.expect_all(expectations)
         def view_silver_clickstream():
-            df = dlt.read(f"bronze_{entity}")
+            # return spark.readStream.format("delta").table("cdc_data.users")
+            df = dlt.read_stream(f"bronze_{entity}")
             if transform:
                 df = transform(df)
             return df
@@ -74,7 +74,7 @@ class Pipeline():
             target=f"silver_{entity}",
             source=f"view_silver_{entity}",
             keys=keys,
-            sequence_by=sequence_by
+            sequence_by=col(sequence_by)
             )
 
     def silver_to_gold(
