@@ -12,7 +12,7 @@ class XDBUtils():
         self.spark = spark
         self.dbutils = dbutils
         self._fs = FileSystem(self.spark, self.dbutils)
-        self._pipeline = Pipeline()
+        self._pipeline = Pipeline(self.spark)
         self._transforms = Transforms(self.spark)
 
     @property

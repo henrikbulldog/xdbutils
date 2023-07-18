@@ -3,18 +3,22 @@
 from typing import Callable
 import requests
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, current_timestamp, input_file_name
+from pyspark.sql.functions import col, current_timestamp
 import dlt  # pylint: disable=import-error
 
 
 class Pipeline():
     """ Delta Live Tables Pipeline """
 
+    def __init__(self, spark):
+        self.spark = spark   
+
     def raw_to_bronze(
         self,
         source_system,
         entity,
-        raw_data
+        raw_base_path,
+        raw_format
         ):
         """ Raw to bronze """
 
@@ -23,7 +27,13 @@ class Pipeline():
             name=f"bronze_{entity}"
         )
         def raw_to_bronze_table():
-            return ( raw_data
+            return ( self.spark.readStream.format("cloudFiles")
+                .option("cloudFiles.format", raw_format)
+                .option("cloudFiles.inferColumnTypes", "true")
+                .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
+                .option("cloudFiles.schemaLocation", f"{raw_base_path}/checkpoints/{source_system}/{entity}")
+                .option("header", True)
+                .load(f"{raw_base_path}/{source_system}/{entity}")
                 .withColumn("sys_ingest_time", current_timestamp())
             )
 
@@ -61,12 +71,12 @@ class Pipeline():
         @dlt.view(name=f"view_silver_{entity}")
         @dlt.expect_all(expectations)
         def view_silver():
-            df = dlt.read(f"bronze_{entity}")
+            df = dlt.read_stream(f"bronze_{entity}")
             if transform:
                 df = transform(df)
             return df
 
-        dlt.create_target_table(
+        dlt.create_streaming_table(
             name=f"silver_{entity}",
             comment=f"Bronze to Silver, {source_system}.{entity}",
             )
