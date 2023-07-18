@@ -60,9 +60,8 @@ class Pipeline():
 
         @dlt.view(name=f"view_silver_{entity}")
         @dlt.expect_all(expectations)
-        def view_silver_clickstream():
-            # return spark.readStream.format("delta").table("cdc_data.users")
-            df = dlt.read_stream(f"bronze_{entity}")
+        def view_silver():
+            df = dlt.read(f"bronze_{entity}")
             if transform:
                 df = transform(df)
             return df
