@@ -67,7 +67,7 @@ class Pipeline():
                 df = transform(df)
             return df
 
-        dlt.create_streaming_table(
+        dlt.create_target_table(
             name=f"silver_{entity}",
             comment=f"Bronze to Silver, {source_system}.{entity}",
             )
