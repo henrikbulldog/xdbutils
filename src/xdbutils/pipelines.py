@@ -3,7 +3,7 @@
 from typing import Callable
 import requests
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, current_timestamp, input_file_name
 import dlt  # pylint: disable=import-error
 
 
@@ -23,7 +23,10 @@ class Pipeline():
             name=f"bronze_{entity}"
         )
         def raw_to_bronze_table():
-            return raw_data
+            return ( raw_data
+                .withColumn("sys_ingest_time", current_timestamp())
+                .withColumn("sys_source_file", input_file_name())
+            )
 
     def bronze_to_silver(
         self,
