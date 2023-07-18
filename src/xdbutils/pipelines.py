@@ -25,7 +25,6 @@ class Pipeline():
         def raw_to_bronze_table():
             return ( raw_data
                 .withColumn("sys_ingest_time", current_timestamp())
-                .withColumn("sys_source_file", input_file_name())
             )
 
     def bronze_to_silver(
