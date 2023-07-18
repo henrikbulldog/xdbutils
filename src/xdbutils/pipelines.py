@@ -18,9 +18,13 @@ class Pipeline():
         source_system,
         entity,
         raw_base_path,
-        raw_format
+        raw_format,
+        options = None
         ):
         """ Raw to bronze """
+
+        if not options:
+            options = {}
 
         @dlt.table(
             comment=f"Raw to Bronze, {source_system}.{entity}",
@@ -28,11 +32,11 @@ class Pipeline():
         )
         def raw_to_bronze_table():
             return ( self.spark.readStream.format("cloudFiles")
+                .options(**options)
                 .option("cloudFiles.format", raw_format)
                 .option("cloudFiles.inferColumnTypes", "true")
                 .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
                 .option("cloudFiles.schemaLocation", f"{raw_base_path}/checkpoints/{source_system}/{entity}")
-                .option("header", True)
                 .load(f"{raw_base_path}/{source_system}/{entity}")
                 .withColumn("sys_ingest_time", current_timestamp())
             )
@@ -42,9 +46,12 @@ class Pipeline():
         source_system,
         entity,
         transform: Callable[[DataFrame], DataFrame] = None,
-        expectations={}
+        expectations = None
         ):
         """ Bronze to Silver, append-only """
+
+        if not expectations:
+            expectations = {}
 
         @dlt.table(
             comment=f"Bronze to Silver, {source_system}.{entity}",
@@ -64,9 +71,12 @@ class Pipeline():
         keys,
         sequence_by,
         transform: Callable[[DataFrame], DataFrame] = None,
-        expectations={}
-    ):
+        expectations = None
+        ):
         """ Bronze to Silver, upsert """
+
+        if not expectations:
+            expectations = {}
 
         @dlt.view(name=f"view_silver_{entity}")
         @dlt.expect_all(expectations)
@@ -94,8 +104,12 @@ class Pipeline():
         source_system,
         entity,
         transform: Callable[[DataFrame], DataFrame] = None,
-        expectations={}):
+        expectations = None
+        ):
         """ Bronze to Silver """
+
+        if not expectations:
+            expectations = {}
 
         @dlt.table(
             comment=f"Silver to Gold, {source_system}.{entity}_{name}",
