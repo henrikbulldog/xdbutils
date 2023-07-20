@@ -6,7 +6,6 @@ from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, current_timestamp
 import dlt  # pylint: disable=import-error
 
-
 class Pipeline():
     """ Delta Live Tables Pipeline """
 
@@ -40,15 +39,15 @@ class Pipeline():
                 .load(f"{raw_base_path}/{source_system}/{entity}")
                 .withColumn("sys_ingest_time", current_timestamp())
             )
-        
+ 
     def event_to_bronze(
         self,
         source_system,
         entity,
         eventhub_namespace,
+        eventhub_group_id,
         eventhub_name,
-        eventhub_access_key_name,
-        eventhub_access_key_value,
+        eventhub_connection_string,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None,
     ):
@@ -57,23 +56,22 @@ class Pipeline():
         if not expectations:
             expectations = {}
 
-        eventhub_connection_string = f"Endpoint=sb://{eventhub_namespace}.servicebus.windows.net/;SharedAccessKeyName={eventhub_access_key_name};SharedAccessKey={eventhub_access_key_value}"
-
         kafka_options = {
-        "kafka.bootstrap.servers"  : f"{eventhub_namespace}.servicebus.windows.net:9093",
-        "subscribe"                : eventhub_name,
-        "kafka.sasl.mechanism"     : "PLAIN",
-        "kafka.security.protocol"  : "SASL_SSL",
-        "kafka.sasl.jaas.config"   : f"kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$ConnectionString\" password=\"{eventhub_connection_string}\";",
-        "kafka.request.timeout.ms" : 30000,
-        "kafka.session.timeout.ms" : 30000,
-        "maxOffsetsPerTrigger"     : None,
-        "failOnDataLoss"           : True,
-        "startingOffsets"          : "latest"
+            "kafka.bootstrap.servers"  : f"{eventhub_namespace}.servicebus.windows.net:9093",
+            "subscribe"                : eventhub_name,
+            "kafka.group.id"           : eventhub_group_id,
+            "kafka.sasl.mechanism"     : "PLAIN",
+            "kafka.security.protocol"  : "SASL_SSL",
+            "kafka.sasl.jaas.config"   : f"kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$ConnectionString\" password=\"{eventhub_connection_string}\";",
+            "kafka.request.timeout.ms" : "6000",
+            "kafka.session.timeout.ms" : "6000",
+            "maxOffsetsPerTrigger"     : "600",
+            "failOnDataLoss"           : 'true',
+            "startingOffsets"          : "latest"
         }
 
         @dlt.create_table(
-            comment=f"Stream to bronze, {eventhub_name} to {source_system}.{entity}",
+            comment=f"Event to bronze, {eventhub_name} to {source_system}.{entity}",
             name=f"bronze_{entity}"
         )
         @dlt.expect_all(expectations)
