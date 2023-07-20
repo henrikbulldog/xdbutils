@@ -27,7 +27,11 @@ class Pipeline():
 
         @dlt.table(
             comment=f"Raw to Bronze, {source_system}.{entity}",
-            name=f"bronze_{entity}"
+            name=f"bronze_{entity}",
+            table_properties={
+                "quality": "bronze",
+                "pipelines.reset.allowed": "false" # preserves the data in the delta table if you do full refresh
+            },
         )
         def dlt_table():
             return ( self.spark.readStream.format("cloudFiles")
@@ -49,10 +53,13 @@ class Pipeline():
         eventhub_name,
         eventhub_connection_string,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+        partition_cols = None,
         expectations = None,
     ):
         """ Event to bronze """
 
+        if not partition_cols:
+            partition_cols = []
         if not expectations:
             expectations = {}
 
@@ -72,8 +79,12 @@ class Pipeline():
 
         @dlt.create_table(
             comment=f"Event to bronze, {eventhub_name} to {source_system}.{entity}",
-            name=f"bronze_{entity}"
-        )
+            name=f"bronze_{entity}",
+            table_properties={
+                "quality": "bronze",
+                "pipelines.reset.allowed": "false" # preserves the data in the delta table if you do full refresh
+            },
+            partition_cols=partition_cols        )
         @dlt.expect_all(expectations)
         def dlt_table():
             return (
@@ -98,7 +109,11 @@ class Pipeline():
 
         @dlt.table(
             comment=f"Bronze to Silver, {source_system}.{entity}",
-            name=f"silver_{entity}"
+            name=f"silver_{entity}",
+            table_properties={
+                "quality": "silver",
+                "pipelines.reset.allowed": "false" # preserves the data in the delta table if you do full refresh
+            },
         )
         @dlt.expect_all(expectations)
         def dlt_table():
@@ -132,6 +147,10 @@ class Pipeline():
         dlt.create_streaming_table(
             name=f"silver_{entity}",
             comment=f"Bronze to Silver, {source_system}.{entity}",
+            table_properties={
+                "quality": "bronze",
+                "pipelines.reset.allowed": "false" # preserves the data in the delta table if you do full refresh
+            },
             )
 
         dlt.apply_changes(
@@ -156,7 +175,11 @@ class Pipeline():
 
         @dlt.table(
             comment=f"Silver to Gold, {source_system}.{entity}_{name}",
-            name=f"gold_{entity}_{name}"
+            name=f"gold_{entity}_{name}",
+            table_properties={
+                "quality": "gold",
+                "pipelines.reset.allowed": "false" # preserves the data in the delta table if you do full refresh
+            },
         )
         @dlt.expect_all(expectations)
         def dlt_table():
