@@ -11,7 +11,7 @@ class Pipeline():
     """ Delta Live Tables Pipeline """
 
     def __init__(self, spark):
-        self.spark = spark   
+        self.spark = spark
 
     def raw_to_bronze(
         self,
@@ -30,7 +30,7 @@ class Pipeline():
             comment=f"Raw to Bronze, {source_system}.{entity}",
             name=f"bronze_{entity}"
         )
-        def raw_to_bronze_table():
+        def dlt_table():
             return ( self.spark.readStream.format("cloudFiles")
                 .options(**options)
                 .option("cloudFiles.format", raw_format)
@@ -40,12 +40,57 @@ class Pipeline():
                 .load(f"{raw_base_path}/{source_system}/{entity}")
                 .withColumn("sys_ingest_time", current_timestamp())
             )
+        
+    def event_to_bronze(
+        self,
+        source_system,
+        entity,
+        eventhub_namespace,
+        eventhub_name,
+        eventhub_access_key_name,
+        eventhub_access_key_value,
+        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+        expectations = None,
+    ):
+        """ Event to bronze """
+
+        if not expectations:
+            expectations = {}
+
+        eventhub_connection_string = f"Endpoint=sb://{eventhub_namespace}.servicebus.windows.net/;SharedAccessKeyName={eventhub_access_key_name};SharedAccessKey={eventhub_access_key_value}"
+
+        kafka_options = {
+        "kafka.bootstrap.servers"  : f"{eventhub_namespace}.servicebus.windows.net:9093",
+        "subscribe"                : eventhub_name,
+        "kafka.sasl.mechanism"     : "PLAIN",
+        "kafka.security.protocol"  : "SASL_SSL",
+        "kafka.sasl.jaas.config"   : f"kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$ConnectionString\" password=\"{eventhub_connection_string}\";",
+        "kafka.request.timeout.ms" : 30000,
+        "kafka.session.timeout.ms" : 30000,
+        "maxOffsetsPerTrigger"     : None,
+        "failOnDataLoss"           : True,
+        "startingOffsets"          : "latest"
+        }
+
+        @dlt.create_table(
+            comment=f"Stream to bronze, {eventhub_name} to {source_system}.{entity}",
+            name=f"bronze_{entity}"
+        )
+        @dlt.expect_all(expectations)
+        def dlt_table():
+            return (
+                self.spark.readStream
+                .format("kafka")
+                .options(**kafka_options)
+                .load()
+                .transform(parse)
+            )
 
     def bronze_to_silver(
         self,
         source_system,
         entity,
-        transform: Callable[[DataFrame], DataFrame] = None,
+        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
         """ Bronze to Silver, append-only """
@@ -58,11 +103,11 @@ class Pipeline():
             name=f"silver_{entity}"
         )
         @dlt.expect_all(expectations)
-        def bronze_to_silver_table():
-            df = dlt.read(f"bronze_{entity}")
-            if transform:
-                df = transform(df)
-            return df
+        def dlt_table():
+            return (
+                dlt.read(f"bronze_{entity}")
+                .transform(parse)
+            )
         
     def bronze_to_silver_upsert(
         self,
@@ -70,7 +115,7 @@ class Pipeline():
         entity,
         keys,
         sequence_by,
-        transform: Callable[[DataFrame], DataFrame] = None,
+        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
         """ Bronze to Silver, upsert """
@@ -80,11 +125,11 @@ class Pipeline():
 
         @dlt.view(name=f"view_silver_{entity}")
         @dlt.expect_all(expectations)
-        def view_silver():
-            df = dlt.read_stream(f"bronze_{entity}")
-            if transform:
-                df = transform(df)
-            return df
+        def dlt_view():
+            return (
+                dlt.read_stream(f"bronze_{entity}")
+                .transform(parse)
+            )
 
         dlt.create_streaming_table(
             name=f"silver_{entity}",
@@ -103,7 +148,7 @@ class Pipeline():
         name,
         source_system,
         entity,
-        transform: Callable[[DataFrame], DataFrame] = None,
+        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
         """ Bronze to Silver """
@@ -116,11 +161,11 @@ class Pipeline():
             name=f"gold_{entity}_{name}"
         )
         @dlt.expect_all(expectations)
-        def silver_table():
-            df = dlt.read(f"silver_{entity}")
-            if transform:
-                df = transform(df)
-            return df
+        def dlt_table():
+            return (
+                dlt.read(f"silver_{entity}")
+                .transform(parse)
+            )
 
     def create_workflow(
         self,
