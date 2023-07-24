@@ -2,7 +2,7 @@
 
 from pyspark.sql import DataFrame
 from xdbutils.datalakehouse import DataLakehouse
-from xdbutils.pipelines import Pipeline
+from xdbutils.pipelines import EventPipeline, FilePipeline, Pipeline
 from xdbutils.transforms import scd2
 
 class XDBUtils():
@@ -12,7 +12,7 @@ class XDBUtils():
         self.spark = spark
         self.dbutils = dbutils
         self._fs = FileSystem(self.spark, self.dbutils)
-        self._pipeline = Pipeline(self.spark)
+        self._pipelines = Pipelines(self.spark)
         self._transforms = Transforms(self.spark)
 
     @property
@@ -21,9 +21,9 @@ class XDBUtils():
         return self._fs
 
     @property
-    def pipeline(self):
+    def pipelines(self):
         """ Delta Live Tables Pipeline """
-        return self._pipeline
+        return self._pipelines
 
     @property
     def transforms(self):
@@ -34,6 +34,21 @@ class XDBUtils():
         """ Create data Lake House """
         return DataLakehouse(self.spark, raw_path, bronze_path, silver_path, gold_path)
 
+class Pipelines():
+
+    def __init__(self, spark):
+        self._file_pipeline = FilePipeline(spark)
+        self._event_pipeline = EventPipeline(spark)
+
+    @property
+    def files(self):
+        """ Delta Live Tables Pipeline """
+        return self._file_pipeline
+
+    @property
+    def events(self):
+        """ Delta Live Tables Pipeline """
+        return self._event_pipeline
 
 class Transforms():
     """ Transforms """
