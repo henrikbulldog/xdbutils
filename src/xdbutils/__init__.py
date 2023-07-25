@@ -28,11 +28,11 @@ class XDBUtils():
         """ Create data Lake House """
         return DataLakehouse(self.spark, raw_path, bronze_path, silver_path, gold_path)
     
-    def create_dlt_batch_pipeline(self, spark, source_system, entity, data_owner=None):
-        return DLTFilePipeline(spark, source_system, entity, data_owner)
+    def create_dlt_batch_pipeline(self, source_system, entity, data_owner=None):
+        return DLTFilePipeline(self.spark, source_system, entity, data_owner)
 
-    def create_dlt_event_pipeline(self, spark, source_system, entity, data_owner=None):
-        return DLTEventPipeline(spark, source_system, entity, data_owner)
+    def create_dlt_event_pipeline(self, source_system, entity, data_owner=None):
+        return DLTEventPipeline(self.spark, source_system, entity, data_owner)
 
 
 class Transforms():
