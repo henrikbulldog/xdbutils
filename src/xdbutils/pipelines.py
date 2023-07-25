@@ -158,9 +158,10 @@ class DLTPipeline():
             )
 
         if response.status_code == 200:
-            statuses = response.json()["statuses"]
-            if statuses and len(statuses) == 1:
-                return statuses[0]["pipeline_id"]
+            payload = response.json()
+            if "statuses" in payload.keys():
+                if len(payload["statuses"]) == 1:
+                    return payload["statuses"][0]["pipeline_id"]
 
         return None
 
