@@ -8,17 +8,18 @@ from pyspark.sql.functions import col, current_timestamp
 import dlt  # pylint: disable=import-error
 
 
-class Pipeline():
+class DLTPipeline():
     """ Delta Live Tables Pipeline """
 
-    def __init__(self, spark):
+    def __init__(self, spark, source_system, entity, data_owner):
         self.spark = spark
         self.continuous_workflow = False
+        self.source_system = source_system
+        self.entity = entity
+        self.data_owner = data_owner
 
     def bronze_to_silver(
         self,
-        source_system,
-        entity,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
@@ -28,8 +29,8 @@ class Pipeline():
             expectations = {}
 
         @dlt.table(
-            comment=f"Bronze to Silver, {source_system}.{entity}",
-            name=f"silver_{entity}",
+            comment=f"Source system: {self.source_system}, entity: {self.entity}, data owner: {self.data_owner}",
+            name=f"silver_{self.entity}",
             table_properties={
                 "quality": "silver",
                 "pipelines.reset.allowed": "false"
@@ -38,14 +39,12 @@ class Pipeline():
         @dlt.expect_all(expectations)
         def dlt_table():
             return (
-                dlt.read(f"bronze_{entity}")
+                dlt.read(f"bronze_{self.entity}")
                 .transform(parse)
             )
 
     def bronze_to_silver_upsert(
         self,
-        source_system,
-        entity,
         keys,
         sequence_by,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
@@ -56,17 +55,17 @@ class Pipeline():
         if not expectations:
             expectations = {}
 
-        @dlt.view(name=f"view_silver_{entity}")
+        @dlt.view(name=f"view_silver_{self.entity}")
         @dlt.expect_all(expectations)
         def dlt_view():
             return (
-                dlt.read_stream(f"bronze_{entity}")
+                dlt.read_stream(f"bronze_{self.entity}")
                 .transform(parse)
             )
 
         dlt.create_streaming_table(
-            name=f"silver_{entity}",
-            comment=f"Bronze to Silver, {source_system}.{entity}",
+            name=f"silver_{self.entity}",
+            comment=f"Source system: {self.source_system}, entity: {self.entity}, data owner: {self.data_owner}",
             table_properties={
                 "quality": "bronze",
                 "pipelines.reset.allowed": "false"
@@ -74,8 +73,8 @@ class Pipeline():
             )
 
         dlt.apply_changes(
-            target=f"silver_{entity}",
-            source=f"view_silver_{entity}",
+            target=f"silver_{self.entity}",
+            source=f"view_silver_{self.entity}",
             keys=keys,
             sequence_by=col(sequence_by)
             )
@@ -83,8 +82,6 @@ class Pipeline():
     def silver_to_gold(
         self,
         name,
-        source_system,
-        entity,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
@@ -94,8 +91,8 @@ class Pipeline():
             expectations = {}
 
         @dlt.table(
-            comment=f"Silver to Gold, {source_system}.{entity}_{name}",
-            name=f"gold_{entity}_{name}",
+            comment=f"Source system: {self.source_system}, entity: {self.entity}, data owner: {self.data_owner}",
+            name=f"gold_{self.entity}_{name}",
             table_properties={
                 "quality": "gold",
                 "pipelines.reset.allowed": "false"
@@ -104,21 +101,17 @@ class Pipeline():
         @dlt.expect_all(expectations)
         def dlt_table():
             return (
-                dlt.read(f"silver_{entity}")
+                dlt.read(f"silver_{self.entity}")
                 .transform(parse)
             )
 
     def __get_workflow_settings(
         self,
-        source_system,
-        entity,
         catalog,
         source_path,
-        data_owner = None,
-        continuous = False,
         ):
         return {
-            "name": f"{source_system}-{entity}",
+            "name": f"{self.source_system}-{self.entity}",
             "edition": "Advanced",
             "development": True,
             "clusters": [
@@ -140,21 +133,19 @@ class Pipeline():
                 }
             ],
             "catalog": catalog,
-            "target": source_system,
+            "target": self.source_system,
             "configuration": {
-                "data_owner": data_owner
+                "data_owner": self.data_owner
             },
-            "continuous": continuous
+            "continuous": self.continuous_workflow
         }
 
     def __get_workflow_id(
         self,
-        source_system,
-        entity,
         databricks_host,
         databricks_token
         ):
-        name = f"{source_system}-{entity}"
+        name = f"{self.source_system}-{self.entity}"
         params = urllib.parse.urlencode(
             {"filter": f"name LIKE '{name}'"},
             quote_via=urllib.parse.quote)
@@ -208,8 +199,6 @@ class Pipeline():
 
     def create_or_update_workflow(
         self,
-        source_system,
-        entity,
         catalog,
         source_path,
         databricks_host,
@@ -219,17 +208,11 @@ class Pipeline():
         """ Create Delta Live Tables Workflow """
 
         workflow_settings = self.__get_workflow_settings(
-            source_system=source_system,
-            entity=entity,
             catalog=catalog,
             source_path=source_path,
-            data_owner=data_owner,
-            continuous=self.continuous_workflow
             )
 
         pipeline_id = self.__get_workflow_id(
-            source_system=source_system,
-            entity=entity,
             databricks_host=databricks_host,
             databricks_token=databricks_token
             )
@@ -249,13 +232,11 @@ class Pipeline():
                 )
 
 
-class FilePipeline(Pipeline):
+class DLTFilePipeline(DLTPipeline):
     """ Delta Live Tables File Pipeline """
 
     def raw_to_bronze(
         self,
-        source_system,
-        entity,
         raw_base_path,
         raw_format,
         options = None
@@ -266,8 +247,8 @@ class FilePipeline(Pipeline):
             options = {}
 
         @dlt.table(
-            comment=f"Raw to Bronze, {source_system}.{entity}",
-            name=f"bronze_{entity}",
+            comment=f"Source system: {self.source_system}, entity: {self.entity}, data owner: {self.data_owner}",
+            name=f"bronze_{self.entity}",
             table_properties={
                 "quality": "bronze",
                 "pipelines.reset.allowed": "false" # preserves the data in the delta table if you do full refresh
@@ -281,24 +262,22 @@ class FilePipeline(Pipeline):
                 .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
                 .option(
                     "cloudFiles.schemaLocation",
-                    f"{raw_base_path}/checkpoints/{source_system}/{entity}"
+                    f"{raw_base_path}/checkpoints/{self.source_system}/{self.entity}"
                     )
-                .load(f"{raw_base_path}/{source_system}/{entity}")
+                .load(f"{raw_base_path}/{self.source_system}/{self.entity}")
                 .withColumn("sys_ingest_time", current_timestamp())
             )
 
 
-class EventPipeline(Pipeline):
+class DLTEventPipeline(DLTPipeline):
     """ Delta Live Tables Event Pipeline """
 
-    def __init__(self, spark):
-        super().__init__(spark)
+    def __init__(self, spark, source_system, entity, data_owner):
+        super().__init__(spark, source_system, entity, data_owner)
         self.continuous_workflow = True
 
     def event_to_bronze(
         self,
-        source_system,
-        entity,
         eventhub_namespace,
         eventhub_group_id,
         eventhub_name,
@@ -329,8 +308,8 @@ class EventPipeline(Pipeline):
         }
 
         @dlt.create_table(
-            comment=f"Event to bronze, {eventhub_name} to {source_system}.{entity}",
-            name=f"bronze_{entity}",
+            comment=f"Source system: {self.source_system}, entity: {self.entity}, data owner: {self.data_owner}",
+            name=f"bronze_{self.entity}",
             table_properties={
                 "quality": "bronze",
                 "pipelines.reset.allowed": "false"
