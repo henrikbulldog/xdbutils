@@ -1,10 +1,12 @@
 """ Delta Live Tables Pipelines """
 
 from typing import Callable
+import urllib
 import requests
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, current_timestamp
 import dlt  # pylint: disable=import-error
+
 
 class Pipeline():
     """ Delta Live Tables Pipeline """
@@ -30,7 +32,7 @@ class Pipeline():
             name=f"silver_{entity}",
             table_properties={
                 "quality": "silver",
-                "pipelines.reset.allowed": "false" # preserves the data in the delta table if you do full refresh
+                "pipelines.reset.allowed": "false"
             },
         )
         @dlt.expect_all(expectations)
@@ -39,7 +41,7 @@ class Pipeline():
                 dlt.read(f"bronze_{entity}")
                 .transform(parse)
             )
-        
+
     def bronze_to_silver_upsert(
         self,
         source_system,
@@ -67,7 +69,7 @@ class Pipeline():
             comment=f"Bronze to Silver, {source_system}.{entity}",
             table_properties={
                 "quality": "bronze",
-                "pipelines.reset.allowed": "false" # preserves the data in the delta table if you do full refresh
+                "pipelines.reset.allowed": "false"
             },
             )
 
@@ -96,7 +98,7 @@ class Pipeline():
             name=f"gold_{entity}_{name}",
             table_properties={
                 "quality": "gold",
-                "pipelines.reset.allowed": "false" # preserves the data in the delta table if you do full refresh
+                "pipelines.reset.allowed": "false"
             },
         )
         @dlt.expect_all(expectations)
@@ -106,18 +108,16 @@ class Pipeline():
                 .transform(parse)
             )
 
-    def create_workflow(
+    def __get_workflow_settings(
         self,
         source_system,
         entity,
         catalog,
         source_path,
-        databricks_host,
-        databricks_token
+        data_owner = None,
+        continuous = False,
         ):
-        """ Create Delta Live Tables Workflow """
-
-        workflow_settings = {
+        return {
             "name": f"{source_system}-{entity}",
             "edition": "Advanced",
             "development": True,
@@ -131,6 +131,7 @@ class Pipeline():
                 }
                 }
             ],
+            "channel": "PREVIEW",
             "libraries": [
                 {
                 "notebook": {
@@ -140,8 +141,61 @@ class Pipeline():
             ],
             "catalog": catalog,
             "target": source_system,
-            "continuous": self.continuous_workflow
+            "configuration": {
+                "data_owner": data_owner
+            },
+            "continuous": continuous
         }
+
+    def __get_workflow_id(
+        self,
+        source_system,
+        entity,
+        databricks_host,
+        databricks_token
+        ):
+        name = f"{source_system}-{entity}"
+        params = urllib.parse.urlencode(
+            {"filter": f"name LIKE '{name}'"},
+            quote_via=urllib.parse.quote)
+
+        response = requests.get(
+            url=f"https://{databricks_host}/api/2.0/pipelines",
+            params=params,
+            headers={"Authorization": f"Bearer {databricks_token}"},
+            timeout=60
+            )
+
+        if response.status_code == 200:
+            statuses = response.json()["statuses"]
+            if statuses and len(statuses) == 1:
+                return statuses[0]["pipeline_id"]
+
+        return None
+
+    def __update_workflow(
+        self,
+        pipeline_id,
+        workflow_settings,
+        databricks_host,
+        databricks_token
+        ):
+
+        response = requests.put(
+            url=f"https://{databricks_host}/api/2.0/pipelines/{pipeline_id}",
+            json=workflow_settings,
+            headers={"Authorization": f"Bearer {databricks_token}"},
+            timeout=60
+            )
+
+        response.raise_for_status()
+
+    def __create_workflow(
+        self,
+        workflow_settings,
+        databricks_host,
+        databricks_token
+        ):
 
         response = requests.post(
             url=f"https://{databricks_host}/api/2.0/pipelines",
@@ -151,6 +205,48 @@ class Pipeline():
             )
 
         response.raise_for_status()
+
+    def create_or_update_workflow(
+        self,
+        source_system,
+        entity,
+        catalog,
+        source_path,
+        databricks_host,
+        databricks_token,
+        data_owner = None
+        ):
+        """ Create Delta Live Tables Workflow """
+
+        workflow_settings = self.__get_workflow_settings(
+            source_system=source_system,
+            entity=entity,
+            catalog=catalog,
+            source_path=source_path,
+            data_owner=data_owner,
+            continuous=self.continuous_workflow
+            )
+
+        pipeline_id = self.__get_workflow_id(
+            source_system=source_system,
+            entity=entity,
+            databricks_host=databricks_host,
+            databricks_token=databricks_token
+            )
+
+        if pipeline_id:
+            self.__update_workflow(
+                pipeline_id,
+                workflow_settings,
+                databricks_host,
+                databricks_token
+                )
+        else:
+            self.__create_workflow(
+                workflow_settings,
+                databricks_host,
+                databricks_token
+                )
 
 
 class FilePipeline(Pipeline):
@@ -183,7 +279,10 @@ class FilePipeline(Pipeline):
                 .option("cloudFiles.format", raw_format)
                 .option("cloudFiles.inferColumnTypes", "true")
                 .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
-                .option("cloudFiles.schemaLocation", f"{raw_base_path}/checkpoints/{source_system}/{entity}")
+                .option(
+                    "cloudFiles.schemaLocation",
+                    f"{raw_base_path}/checkpoints/{source_system}/{entity}"
+                    )
                 .load(f"{raw_base_path}/{source_system}/{entity}")
                 .withColumn("sys_ingest_time", current_timestamp())
             )
@@ -234,7 +333,7 @@ class EventPipeline(Pipeline):
             name=f"bronze_{entity}",
             table_properties={
                 "quality": "bronze",
-                "pipelines.reset.allowed": "false" # preserves the data in the delta table if you do full refresh
+                "pipelines.reset.allowed": "false"
             },
             partition_cols=partition_cols        )
         @dlt.expect_all(expectations)
