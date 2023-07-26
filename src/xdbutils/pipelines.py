@@ -18,10 +18,10 @@ class DLTPipeline():
         source_system,
         entity,
         catalog,
+        data_owner,
         databricks_token,
         databricks_host = None,
-        source_path = None,
-        data_owner = None
+        source_path = None
         ):
         
         self.spark = spark
@@ -314,10 +314,10 @@ class DLTEventPipeline(DLTPipeline):
         source_system,
         entity,
         catalog,
+        data_owner,
         databricks_token,
         databricks_host = None,
-        source_path = None,
-        data_owner = None
+        source_path = None
         ):
 
         super().__init__(
@@ -326,10 +326,10 @@ class DLTEventPipeline(DLTPipeline):
             source_system,
             entity,
             catalog,
+            data_owner,
             databricks_token,
             databricks_host,
-            source_path,
-            data_owner
+            source_path
             )
 
         self.continuous_workflow = True

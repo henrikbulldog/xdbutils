@@ -33,10 +33,10 @@ class XDBUtils():
         source_system,
         entity,
         catalog,
+        data_owner,
         databricks_token,
         databricks_host = None,
-        source_path = None,
-        data_owner = None
+        source_path = None
         ):
         """ Create a Delta Live Tables File/Batch Pipeline """
 
@@ -47,10 +47,10 @@ class XDBUtils():
             source_system=source_system,
             entity=entity,
             catalog=catalog,
+            data_owner=data_owner,
             databricks_token=databricks_token,
             databricks_host=databricks_host,
-            source_path=source_path,
-            data_owner=data_owner
+            source_path=source_path
         )
 
     def create_dlt_event_pipeline(
@@ -58,10 +58,10 @@ class XDBUtils():
         source_system,
         entity,
         catalog,
+        data_owner,
         databricks_token,
         databricks_host = None,
-        source_path = None,
-        data_owner = None
+        source_path = None
         ):
         """ Create a Delta Live Tables Event/Continuous Pipeline """
 
@@ -71,10 +71,10 @@ class XDBUtils():
             source_system=source_system,
             entity=entity,
             catalog=catalog,
+            data_owner=data_owner,
             databricks_token=databricks_token,
             databricks_host=databricks_host,
-            source_path=source_path,
-            data_owner=data_owner
+            source_path=source_path
             )
 
 
