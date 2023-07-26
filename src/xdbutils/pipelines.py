@@ -21,15 +21,16 @@ class DLTPipeline():
         data_owner,
         databricks_token,
         databricks_host = None,
-        source_path = None
+        source_path = None,
+        continuous_workflow = False
         ):
         
         self.spark = spark
         self.dbutils = dbutils
-        self.continuous_workflow = False
         self.source_system = source_system
         self.entity = entity
         self.data_owner = data_owner
+        self.continuous_workflow = continuous_workflow
 
         self.__create_or_update_workflow(
             catalog=catalog,
@@ -191,7 +192,7 @@ class DLTPipeline():
                 "label": "default",
                 "autoscale": {
                     "min_workers": 1,
-                    "max_workers": 5,
+                    "max_workers": 2,
                     "mode": "ENHANCED"
                 }
                 }
@@ -333,10 +334,9 @@ class DLTEventPipeline(DLTPipeline):
             data_owner,
             databricks_token,
             databricks_host,
-            source_path
+            source_path,
+            continuous_workflow = True
             )
-
-        self.continuous_workflow = True
 
     def event_to_bronze(
         self,
