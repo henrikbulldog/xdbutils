@@ -11,12 +11,32 @@ import dlt  # pylint: disable=import-error
 class DLTPipeline():
     """ Delta Live Tables Pipeline """
 
-    def __init__(self, spark, source_system, entity, data_owner):
+    def __init__(
+        self,
+        spark,
+        dbutils,
+        source_system,
+        entity,
+        catalog,
+        databricks_token,
+        databricks_host = None,
+        source_path = None,
+        data_owner = None
+        ):
+        
         self.spark = spark
+        self.dbutils = dbutils
         self.continuous_workflow = False
         self.source_system = source_system
         self.entity = entity
         self.data_owner = data_owner
+
+        self.__create_or_update_workflow(
+            catalog=catalog,
+            databricks_token=databricks_token,
+            databricks_host=databricks_host,
+            source_path=source_path
+            )
 
     def bronze_to_silver(
         self,
@@ -105,6 +125,54 @@ class DLTPipeline():
                 .transform(parse)
             )
 
+    def __create_or_update_workflow(
+        self,
+        catalog,
+        databricks_token,
+        databricks_host = None,
+        source_path = None
+        ):
+        """ Create Delta Live Tables Workflow """
+
+        if not databricks_host:
+            databricks_host = (
+                self.dbutils
+                .notebook.entry_point.getDbutils()
+                .notebook().getContext()
+                .tags().get("browserHostName").get()
+            )
+
+        if not source_path:
+            source_path = (
+                self.dbutils.notebook.entry_point.getDbutils()
+                .notebook().getContext()
+                .notebookPath().get()
+            )
+
+        workflow_settings = self.__get_workflow_settings(
+            catalog=catalog,
+            source_path=source_path,
+            )
+
+        pipeline_id = self.__get_workflow_id(
+            databricks_host=databricks_host,
+            databricks_token=databricks_token
+            )
+
+        if pipeline_id:
+            self.__update_workflow(
+                pipeline_id,
+                workflow_settings,
+                databricks_host,
+                databricks_token
+                )
+        else:
+            self.__create_workflow(
+                workflow_settings,
+                databricks_host,
+                databricks_token
+                )
+            
     def __get_workflow_settings(
         self,
         catalog,
@@ -198,40 +266,6 @@ class DLTPipeline():
 
         response.raise_for_status()
 
-    def create_or_update_workflow(
-        self,
-        catalog,
-        source_path,
-        databricks_host,
-        databricks_token,
-        data_owner = None
-        ):
-        """ Create Delta Live Tables Workflow """
-
-        workflow_settings = self.__get_workflow_settings(
-            catalog=catalog,
-            source_path=source_path,
-            )
-
-        pipeline_id = self.__get_workflow_id(
-            databricks_host=databricks_host,
-            databricks_token=databricks_token
-            )
-
-        if pipeline_id:
-            self.__update_workflow(
-                pipeline_id,
-                workflow_settings,
-                databricks_host,
-                databricks_token
-                )
-        else:
-            self.__create_workflow(
-                workflow_settings,
-                databricks_host,
-                databricks_token
-                )
-
 
 class DLTFilePipeline(DLTPipeline):
     """ Delta Live Tables File Pipeline """
@@ -273,8 +307,31 @@ class DLTFilePipeline(DLTPipeline):
 class DLTEventPipeline(DLTPipeline):
     """ Delta Live Tables Event Pipeline """
 
-    def __init__(self, spark, source_system, entity, data_owner):
-        super().__init__(spark, source_system, entity, data_owner)
+    def __init__(
+        self,
+        spark,
+        dbutils,
+        source_system,
+        entity,
+        catalog,
+        databricks_token,
+        databricks_host = None,
+        source_path = None,
+        data_owner = None
+        ):
+
+        super().__init__(
+            spark,
+            dbutils,
+            source_system,
+            entity,
+            catalog,
+            databricks_token,
+            databricks_host,
+            source_path,
+            data_owner
+            )
+
         self.continuous_workflow = True
 
     def event_to_bronze(
