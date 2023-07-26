@@ -134,20 +134,23 @@ class DLTPipeline():
         ):
         """ Create Delta Live Tables Workflow """
 
-        if not databricks_host:
-            databricks_host = (
-                self.dbutils
-                .notebook.entry_point.getDbutils()
-                .notebook().getContext()
-                .tags().get("browserHostName").get()
-            )
+        try:
+            if not databricks_host:
+                databricks_host = (
+                    self.dbutils
+                    .notebook.entry_point.getDbutils()
+                    .notebook().getContext()
+                    .tags().get("browserHostName").get()
+                )
 
-        if not source_path:
-            source_path = (
-                self.dbutils.notebook.entry_point.getDbutils()
-                .notebook().getContext()
-                .notebookPath().get()
-            )
+            if not source_path:
+                source_path = (
+                    self.dbutils.notebook.entry_point.getDbutils()
+                    .notebook().getContext()
+                    .notebookPath().get()
+                )
+        except:
+            return
 
         workflow_settings = self.__get_workflow_settings(
             catalog=catalog,
