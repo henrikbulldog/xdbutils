@@ -150,6 +150,7 @@ class DLTPipeline():
                     .notebookPath().get()
                 )
         except:
+            # Cannot get information from notebook context, give up
             return
 
         workflow_settings = self.__get_workflow_settings(

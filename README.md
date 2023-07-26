@@ -11,44 +11,57 @@ The package is built for Databricks runtime 13.0 or higher.
 ```
 
 # Using the Delta Live Tables (DLT) Framework
-The framework sets up a Delta Live Tables pipeline that conforms to the medallion (bronze-silver-gold) data pipeline strategy by exposing 3 methods:
-- XDBUtils.pipelines.raw_to_bronze()
-- XDBUtils.pipelines.bronze_to_silver()
-- XDBUtils.pipelines.silver_to_gold()
+In order to set up a Delta Live Tables pipeline, simply create a python notebook in Databricks and add the following commands.
+
+## Create Batch DLT Pipeline for ingesting files
+You can set up DTL to monitor a raw folder and ingest new files as they arrive.
+Calling the method XDBUtils.create_dlt_batch_pipeline() will create or update a DLT workflow of type batch. 
+The workflow will be named <source_system>-<entity>.
+Tables will be created in Unity catalog specified in parameter catalog.
+
+Optional parameters:
+- databricks_host: If omitted, the framework will get the host from the calling notebook context
+- source_path: If omitted, the framework will use the path to the calling notebook
+
+```
+from xdbutils import XDBUtils
+
+xdbutils = XDBUtils(spark, dbutils)
+
+pipeline = xdbutils.create_dlt_batch_pipeline(
+  source_system="eds",
+  entity="co2emis",
+  catalog="testing_dlt",
+  data_owner="Henrik Thomsen",
+  databricks_token=dbutils.secrets().get(scope="<scope>", key="<key>")
+)
+```
 
 ## Raw to bronze
-Read and transform raw data using pyspark. Call XDBUtils.pipelines.raw_to_bronze() with source system, entity and raw data DataFrame:
+Read new raw data.
+DLT will maintain checkpoints in <raw_base_path>/checkpoints so that only new data is ingested.
 ```
-from pyspark.sql.functions import explode, col, lit
-
-xdbutils.pipeline.raw_to_bronze(
-  source_system=source_system,
-  entity=entity,
-  raw_data=(
-    spark
-    .read
-    .option("multiline", True)
-    .json(f"{raw_path}/{source_system}/{entity}")
-    .withColumn("record", explode("records"))
-    .select("record.*")
-  )
+pipeline.raw_to_bronze(
+  raw_base_path="dbfs:/FileStore/henrik-thomsen/data/raw",
+  raw_format="json"
 )
 ```
 This will create the table <catalog>.<source system>.bronze_<entity>, for example testing_dlt.eds.bronze_co2emis.
 
-## Bronze to Silver
-Call XDBUtils.pipelines.bronze_to_silver() with source system, entity, bronze to silver transformation method and expectations:
+## Bronze to Silver with append-only
+Call bronze_to_silver() with  bronze to silver transformation method and expectations:
 
 ```
-xdbutils.pipeline.bronze_to_silver(
-  source_system=source_system,
-  entity=entity,
-  transform=lambda df: (
+from pyspark.sql.functions import explode, col, lit
+
+pipeline.bronze_to_silver(
+  parse=lambda df: (
     df
+    .withColumn("record", explode("records"))
     .select(
-      col("CO2Emission").alias("value"),
-      col("Minutes5UTC").cast("timestamp").alias("timestamp"),
-      col("PriceArea").alias("price_area"),
+      col("record.CO2Emission").alias("value"),
+      col("record.Minutes5UTC").cast("timestamp").alias("timestamp"),
+      col("record.PriceArea").alias("price_area"),
       )
     ),
   expectations={
@@ -59,15 +72,40 @@ xdbutils.pipeline.bronze_to_silver(
 ```
 This will create the table <catalog>.<source system>.silver_<entity>, for example testing_dlt.eds.silver_co2emis.
 
-## Silver to Gold
-Call XDBUtils.pipelines.silver_to_gold() with name, source system, entity and silver to gold transformation method:
+## Bronze to Silver with upsert
+In order to upsert data in silver table, call bronze_to_silver_upsert().
+
+Set parameter key to a combination of columns that uniquely identifies a row.
+Set parameter sequence_by to a column that can be used to sequence dublicates (rows with same key), DLT will pick the rows with the latest sequence.
 
 ```
-xdbutils.pipeline.silver_to_gold(
+from pyspark.sql.functions import col
+
+pipeline.bronze_to_silver_upsert(
+  keys=["iso_code"],
+  sequence_by="date",
+  parse=lambda df: (
+    df    
+    .select(
+      col("iso_code"),
+      col("total_cases").cast("float"),
+      col("date").cast("Date").alias("date"),
+      )
+    ),
+  expectations={
+    "valid_timestamp": "iso_code IS NOT NULL",
+    "valid_value": "date IS NOT NULL"
+    }
+  )
+  ```
+
+## Silver to Gold
+Call silver_to_gold() with silver to gold transformation method:
+
+```
+pipeline.silver_to_gold(
   name="top_10",
-  source_system=source_system,
-  entity=entity,
-  transform=lambda df: (
+  parse=lambda df: (
     df
       .where(col("price_area") == lit("DK1"))
       .orderBy(col("value").desc())
@@ -78,22 +116,6 @@ xdbutils.pipeline.silver_to_gold(
 ```
 This will create the table <catalog>.<source system>.gold_<entity>_<name>, for example testing_dlt.eds.gold_co2emis_top_10.
 
-## Create Workflow
-Create a Delta Live Tables workflow by calling XDBUtils.pipelines.create_worflow() with source system, entity, unity catalog name, source path (i.e. path to notebook or python file ion repo), databricks host and databricks token:
-
-```
-path_to_current_notebook = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
-current_databricks_host = dbutils.notebook.entry_point.getDbutils().notebook().getContext().tags().get("browserHostName").get()
-
-workflow_settings = xdbutils.pipeline.create_workflow(
-  source_system=source_system,
-  entity=entity,
-  catalog="testing_dlt",
-  source_path=path_to_current_notebook,
-  databricks_host=current_databricks_host,
-  databricks_token=dbutils.secrets().get(scope="<scope>", key="<key>")
-)
-```
 
 # Using the Data Lakehouse Framework
 
