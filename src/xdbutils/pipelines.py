@@ -4,7 +4,7 @@ from typing import Callable
 import urllib
 import requests
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, current_timestamp, expr
+from pyspark.sql.functions import col, current_timestamp, expr, lit
 import dlt  # pylint: disable=import-error
 
 
@@ -62,6 +62,7 @@ class DLTPipeline():
             return (
                 dlt.read(f"bronze_{self.entity}")
                 .transform(parse)
+                .where(col("sys_quarantined") == lit(False))
             )
 
     def bronze_to_silver_upsert(
@@ -82,6 +83,7 @@ class DLTPipeline():
             return (
                 dlt.read_stream(f"bronze_{self.entity}")
                 .transform(parse)
+                .where(col("sys_quarantined") == lit(False))
             )
 
         dlt.create_streaming_table(
@@ -298,7 +300,7 @@ class DLTFilePipeline(DLTPipeline):
             name=f"bronze_{self.entity}",
             table_properties={
                 "quality": "bronze",
-                "pipelines.reset.allowed": "false" # preserves the data in the delta table if you do full refresh
+                "pipelines.reset.allowed": "false"
             },
         )
         def dlt_table():
@@ -313,11 +315,12 @@ class DLTFilePipeline(DLTPipeline):
                     )
                 .load(f"{raw_base_path}/{self.source_system}/{self.entity}")
                 .withColumn("sys_ingest_time", current_timestamp())
+                .withColumn("sys_quarantined", lit(False))
             )
 
             if quarantine_rules:
                 result_df = result_df.withColumn("sys_quarantined", expr(quarantine_rules))
-            
+
             return result_df
 
 
@@ -402,6 +405,7 @@ class DLTEventPipeline(DLTPipeline):
                 .load()
                 .transform(parse)
                 .withColumn("sys_ingest_time", current_timestamp())
+                .withColumn("sys_quarantined", lit(False))
             )
 
             if quarantine_rules:
