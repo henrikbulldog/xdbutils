@@ -291,7 +291,7 @@ class DLTFilePipeline(DLTPipeline):
             expectations = {}
             quarantine_rules = None
         else:
-            quarantine_rules = "NOT({0})".format(" AND ".join(expectations.values()))
+            quarantine_rules = f'NOT(({") AND (".join(expectations.values())}))'
 
         @dlt.table(
             comment=f"Source system: {self.source_system}, entity: {self.entity}, data owner: {self.data_owner}",
@@ -369,7 +369,7 @@ class DLTEventPipeline(DLTPipeline):
             expectations = {}
             quarantine_rules = None
         else:
-            quarantine_rules = "NOT({0})".format(" AND ".join(expectations.values()))
+            quarantine_rules = f'NOT(({") AND (".join(expectations.values())}))'
 
         kafka_options = {
             "kafka.bootstrap.servers"  : f"{eventhub_namespace}.servicebus.windows.net:9093",
