@@ -4,7 +4,7 @@ from typing import Callable
 import urllib
 import requests
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, current_timestamp
+from pyspark.sql.functions import col, current_timestamp, expr
 import dlt  # pylint: disable=import-error
 
 
@@ -279,12 +279,19 @@ class DLTFilePipeline(DLTPipeline):
         self,
         raw_base_path,
         raw_format,
-        options = None
+        options = None,
+        expectations = None,
         ):
         """ Raw to bronze """
 
         if not options:
             options = {}
+
+        if not expectations:
+            expectations = {}
+            quarantine_rules = None
+        else:
+            quarantine_rules = "NOT({0})".format(" AND ".join(expectations.values()))
 
         @dlt.table(
             comment=f"Source system: {self.source_system}, entity: {self.entity}, data owner: {self.data_owner}",
@@ -295,7 +302,7 @@ class DLTFilePipeline(DLTPipeline):
             },
         )
         def dlt_table():
-            return ( self.spark.readStream.format("cloudFiles")
+            result_df = ( self.spark.readStream.format("cloudFiles")
                 .options(**options)
                 .option("cloudFiles.format", raw_format)
                 .option("cloudFiles.inferColumnTypes", "true")
@@ -307,6 +314,11 @@ class DLTFilePipeline(DLTPipeline):
                 .load(f"{raw_base_path}/{self.source_system}/{self.entity}")
                 .withColumn("sys_ingest_time", current_timestamp())
             )
+
+            if quarantine_rules:
+                result_df = result_df.withColumn("sys_quarantined", expr(quarantine_rules))
+            
+            return result_df
 
 
 class DLTEventPipeline(DLTPipeline):
@@ -352,8 +364,12 @@ class DLTEventPipeline(DLTPipeline):
 
         if not partition_cols:
             partition_cols = []
+
         if not expectations:
             expectations = {}
+            quarantine_rules = None
+        else:
+            quarantine_rules = "NOT({0})".format(" AND ".join(expectations.values()))
 
         kafka_options = {
             "kafka.bootstrap.servers"  : f"{eventhub_namespace}.servicebus.windows.net:9093",
@@ -379,10 +395,16 @@ class DLTEventPipeline(DLTPipeline):
             partition_cols=partition_cols        )
         @dlt.expect_all(expectations)
         def dlt_table():
-            return (
+            result_df = (
                 self.spark.readStream
                 .format("kafka")
                 .options(**kafka_options)
                 .load()
                 .transform(parse)
+                .withColumn("sys_ingest_time", current_timestamp())
             )
+
+            if quarantine_rules:
+                result_df = result_df.withColumn("sys_quarantined", expr(quarantine_rules))
+            
+            return result_df
