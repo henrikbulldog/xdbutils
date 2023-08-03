@@ -124,6 +124,9 @@ class DLTPipeline():
         ):
         """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
 
+        if not expectations:
+            expectations = {}
+
         @dlt.view(name=f"view_silver_{self.entity}_changes")
         @dlt.expect_all(expectations)
         def dlt_view():
