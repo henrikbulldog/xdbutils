@@ -111,7 +111,7 @@ class DLTPipeline():
         self,
         keys,
         sequence_by,
-        stored_as_scd_type,
+        stored_as_scd_type = "2",
         ignore_null_updates = False,
         apply_as_deletes = None,
         apply_as_truncates = None,
