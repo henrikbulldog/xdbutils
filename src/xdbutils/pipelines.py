@@ -268,7 +268,8 @@ class DLTPipeline():
             "catalog": catalog,
             "target": self.source_system,
             "configuration": {
-                "data_owner": self.data_owner
+                "data_owner": self.data_owner,
+                "pipelines.enableTrackHistory": "true"
             },
             "continuous": self.continuous_workflow
         }
