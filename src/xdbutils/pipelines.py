@@ -1,11 +1,16 @@
 """ Delta Live Tables Pipelines """
 
 from typing import Callable
+from enum import IntEnum
 import urllib
 import requests
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, current_timestamp, expr, lit
 import dlt  # pylint: disable=import-error
+
+class ScdType(IntEnum):
+    ONE = 1
+    TWO = 1
 
 
 class DLTPipeline():
@@ -100,6 +105,56 @@ class DLTPipeline():
             source=f"view_silver_{self.entity}",
             keys=keys,
             sequence_by=col(sequence_by)
+            )
+
+    def bronze_to_silver_track_changes(
+        self,
+        keys,
+        sequence_by,
+        stored_as_scd_type,
+        ignore_null_updates = False,
+        apply_as_deletes = None,
+        apply_as_truncates = None,
+        column_list = None,
+        except_column_list = None,
+        track_history_column_list = None,
+        track_history_except_column_list = None,
+        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+        expectations = None
+        ):
+        """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
+
+        @dlt.view(name=f"view_silver_{self.entity}_changes")
+        @dlt.expect_all(expectations)
+        def dlt_view():
+            return (
+                dlt.read_stream(f"bronze_{self.entity}")
+                .transform(parse)
+                .where(col("sys_quarantined") == lit(False))
+            )
+
+        dlt.create_streaming_table(
+            name=f"silver_{self.entity}_changes",
+            comment=f"Source system: {self.source_system}, entity: {self.entity}, data owner: {self.data_owner}",
+            table_properties={
+                "quality": "bronze",
+                "pipelines.reset.allowed": "false"
+            },
+            )
+
+        dlt.apply_changes(
+            target=f"silver_{self.entity}_changes",
+            source=f"view_silver_{self.entity}_changes",
+            keys=keys,
+            sequence_by=col(sequence_by),
+            stored_as_scd_type=stored_as_scd_type,
+            ignore_null_updates=ignore_null_updates,
+            apply_as_deletes=apply_as_deletes,
+            apply_as_truncates=apply_as_truncates,
+            column_list=column_list,
+            except_column_list=except_column_list,
+            track_history_column_list=track_history_column_list,
+            track_history_except_column_list=track_history_except_column_list
             )
 
     def silver_to_gold(
