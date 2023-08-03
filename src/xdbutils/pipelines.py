@@ -73,7 +73,7 @@ class DLTPipeline():
     def bronze_to_silver_upsert(
         self,
         keys,
-        sequence_by,
+        sequence_by = "sys_ingest_time",
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
@@ -110,7 +110,7 @@ class DLTPipeline():
     def bronze_to_silver_track_changes(
         self,
         keys,
-        sequence_by,
+        sequence_by = "sys_ingest_time",
         stored_as_scd_type = "2",
         ignore_null_updates = False,
         apply_as_deletes = None,
