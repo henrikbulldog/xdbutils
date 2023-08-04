@@ -74,6 +74,11 @@ class DLTPipeline():
         self,
         keys,
         sequence_by = "sys_ingest_time",
+        ignore_null_updates = False,
+        apply_as_deletes = None,
+        apply_as_truncates = None,
+        column_list = None,
+        except_column_list = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
@@ -104,7 +109,12 @@ class DLTPipeline():
             target=f"silver_{self.entity}",
             source=f"view_silver_{self.entity}",
             keys=keys,
-            sequence_by=col(sequence_by)
+            sequence_by=col(sequence_by),
+            ignore_null_updates=ignore_null_updates,
+            apply_as_deletes=apply_as_deletes,
+            apply_as_truncates=apply_as_truncates,
+            column_list=column_list,
+            except_column_list=except_column_list,
             )
 
     def bronze_to_silver_track_changes(
