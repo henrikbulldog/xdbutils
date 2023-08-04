@@ -79,8 +79,6 @@ class DLTPipeline():
         apply_as_truncates = None,
         column_list = None,
         except_column_list = None,
-        track_history_column_list = None,
-        track_history_except_column_list = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
@@ -117,8 +115,6 @@ class DLTPipeline():
             apply_as_truncates=apply_as_truncates,
             column_list=column_list,
             except_column_list=except_column_list,
-            track_history_column_list=track_history_column_list,
-            track_history_except_column_list=track_history_except_column_list
             )
 
     def bronze_to_silver_track_changes(
@@ -132,7 +128,7 @@ class DLTPipeline():
         column_list = None,
         except_column_list = None,
         track_history_column_list = None,
-        track_history_except_column_list = None,
+        track_history_except_column_list=["sys_ingest_time"],
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
