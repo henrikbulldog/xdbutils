@@ -68,6 +68,7 @@ class DLTPipeline():
                 dlt.read(f"bronze_{self.entity}")
                 .transform(parse)
                 .where(col("sys_quarantined") == lit(False))
+                .drop("sys_quarantined")
             )
 
     def bronze_to_silver_upsert(
@@ -94,6 +95,7 @@ class DLTPipeline():
                 dlt.read_stream(f"bronze_{self.entity}")
                 .transform(parse)
                 .where(col("sys_quarantined") == lit(False))
+                .drop("sys_quarantined")
             )
 
         dlt.create_streaming_table(
@@ -147,6 +149,7 @@ class DLTPipeline():
                 dlt.read_stream(f"bronze_{self.entity}")
                 .transform(parse)
                 .where(col("sys_quarantined") == lit(False))
+                .drop("sys_quarantined")
             )
 
         dlt.create_streaming_table(
