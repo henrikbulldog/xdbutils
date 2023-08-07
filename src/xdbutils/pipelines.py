@@ -128,7 +128,7 @@ class DLTPipeline():
         column_list = None,
         except_column_list = None,
         track_history_column_list = None,
-        track_history_except_column_list=["sys_ingest_time"],
+        track_history_except_column_list = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
@@ -136,6 +136,9 @@ class DLTPipeline():
 
         if not expectations:
             expectations = {}
+
+        if not track_history_except_column_list:
+            track_history_except_column_list = [sequence_by]
 
         @dlt.view(name=f"view_silver_{self.entity}_changes")
         @dlt.expect_all(expectations)
