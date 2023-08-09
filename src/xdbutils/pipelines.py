@@ -69,17 +69,23 @@ class DLTPipeline():
         )
         @dlt.expect_all(expectations)
         def dlt_table():
-            return (
+            
+            silver_df = ( 
                 dlt.read(f"bronze_{self.entity}")
                 .transform(parse)
-                .where(col("sys_quarantined") == lit(False))
-                .drop("sys_quarantined")
+                .where(col("__quarantined") == lit(False))
+                .drop("__quarantined")
             )
+
+            if "_rescued_data" in silver_df.schema.fieldNames():
+                silver_df = silver_df.drop("_rescued_data")
+
+            return silver_df
 
     def bronze_to_silver_upsert(
         self,
         keys,
-        sequence_by = "sys_ingest_time",
+        sequence_by = "__ingest_time",
         ignore_null_updates = False,
         apply_as_deletes = None,
         apply_as_truncates = None,
@@ -99,8 +105,8 @@ class DLTPipeline():
             return (
                 dlt.read_stream(f"bronze_{self.entity}")
                 .transform(parse)
-                .where(col("sys_quarantined") == lit(False))
-                .drop("sys_quarantined")
+                .where(col("__quarantined") == lit(False))
+                .drop("__quarantined")
             )
 
         dlt.create_streaming_table(
@@ -127,7 +133,7 @@ class DLTPipeline():
     def bronze_to_silver_track_changes(
         self,
         keys,
-        sequence_by = "sys_ingest_time",
+        sequence_by = "__ingest_time",
         stored_as_scd_type = "2",
         ignore_null_updates = False,
         apply_as_deletes = None,
@@ -153,8 +159,8 @@ class DLTPipeline():
             return (
                 dlt.read_stream(f"bronze_{self.entity}")
                 .transform(parse)
-                .where(col("sys_quarantined") == lit(False))
-                .drop("sys_quarantined")
+                .where(col("__quarantined") == lit(False))
+                .drop("__quarantined")
             )
 
         dlt.create_streaming_table(
@@ -397,12 +403,12 @@ class DLTFilePipeline(DLTPipeline):
                     f"{raw_base_path}/checkpoints/{self.source_system}/{self.entity}"
                     )
                 .load(f"{raw_base_path}/{self.source_system}/{self.entity}")
-                .withColumn("sys_ingest_time", current_timestamp())
-                .withColumn("sys_quarantined", lit(False))
+                .withColumn("__ingest_time", current_timestamp())
+                .withColumn("__quarantined", lit(False))
             )
 
             if quarantine_rules:
-                result_df = result_df.withColumn("sys_quarantined", expr(quarantine_rules))
+                result_df = result_df.withColumn("__quarantined", expr(quarantine_rules))
 
             return result_df
 
@@ -487,11 +493,11 @@ class DLTEventPipeline(DLTPipeline):
                 .options(**kafka_options)
                 .load()
                 .transform(parse)
-                .withColumn("sys_ingest_time", current_timestamp())
-                .withColumn("sys_quarantined", lit(False))
+                .withColumn("__ingest_time", current_timestamp())
+                .withColumn("__quarantined", lit(False))
             )
 
             if quarantine_rules:
-                result_df = result_df.withColumn("sys_quarantined", expr(quarantine_rules))
+                result_df = result_df.withColumn("__quarantined", expr(quarantine_rules))
             
             return result_df
