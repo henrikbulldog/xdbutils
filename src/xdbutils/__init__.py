@@ -33,7 +33,7 @@ class XDBUtils():
         source_system,
         entity,
         catalog,
-        data_owner,
+        tags,
         databricks_token,
         databricks_host = None,
         source_path = None
@@ -47,7 +47,7 @@ class XDBUtils():
             source_system=source_system,
             entity=entity,
             catalog=catalog,
-            data_owner=data_owner,
+            tags=tags,
             databricks_token=databricks_token,
             databricks_host=databricks_host,
             source_path=source_path
@@ -58,7 +58,7 @@ class XDBUtils():
         source_system,
         entity,
         catalog,
-        data_owner,
+        tags,
         databricks_token,
         databricks_host = None,
         source_path = None
@@ -71,7 +71,7 @@ class XDBUtils():
             source_system=source_system,
             entity=entity,
             catalog=catalog,
-            data_owner=data_owner,
+            tags=tags,
             databricks_token=databricks_token,
             databricks_host=databricks_host,
             source_path=source_path

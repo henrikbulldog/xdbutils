@@ -23,8 +23,8 @@ class DLTPipeline():
         source_system,
         entity,
         catalog,
-        data_owner,
-        databricks_token,
+        tags = None,
+        databricks_token = None,
         databricks_host = None,
         source_path = None,
         continuous_workflow = False
@@ -34,8 +34,13 @@ class DLTPipeline():
         self.dbutils = dbutils
         self.source_system = source_system
         self.entity = entity
-        self.data_owner = data_owner
         self.continuous_workflow = continuous_workflow
+        self.tags = tags
+
+        if not self.tags:
+            self.tags = {}
+        self.tags["Source system"] = self.source_system
+        self.tags["Entity"] = self.entity
 
         self.__create_or_update_workflow(
             catalog=catalog,
@@ -55,7 +60,7 @@ class DLTPipeline():
             expectations = {}
 
         @dlt.table(
-            comment=f"Source system: {self.source_system}, entity: {self.entity}, data owner: {self.data_owner}",
+            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
             name=f"silver_{self.entity}",
             table_properties={
                 "quality": "silver",
@@ -100,7 +105,7 @@ class DLTPipeline():
 
         dlt.create_streaming_table(
             name=f"silver_{self.entity}",
-            comment=f"Source system: {self.source_system}, entity: {self.entity}, data owner: {self.data_owner}",
+            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
             table_properties={
                 "quality": "bronze",
                 "pipelines.reset.allowed": "false"
@@ -154,7 +159,7 @@ class DLTPipeline():
 
         dlt.create_streaming_table(
             name=f"silver_{self.entity}_changes",
-            comment=f"Source system: {self.source_system}, entity: {self.entity}, data owner: {self.data_owner}",
+            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
             table_properties={
                 "quality": "bronze",
                 "pipelines.reset.allowed": "false"
@@ -188,7 +193,7 @@ class DLTPipeline():
             expectations = {}
 
         @dlt.table(
-            comment=f"Source system: {self.source_system}, entity: {self.entity}, data owner: {self.data_owner}",
+            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
             name=f"gold_{self.entity}_{name}",
             table_properties={
                 "quality": "gold",
@@ -259,7 +264,7 @@ class DLTPipeline():
         catalog,
         source_path,
         ):
-        return {
+        settings = {
             "name": f"{self.source_system}-{self.entity}",
             "edition": "Advanced",
             "development": True,
@@ -284,11 +289,14 @@ class DLTPipeline():
             "catalog": catalog,
             "target": self.source_system,
             "configuration": {
-                "data_owner": self.data_owner,
                 "pipelines.enableTrackHistory": "true"
             },
             "continuous": self.continuous_workflow
         }
+
+        settings["configuration"].update(self.tags)
+
+        return settings
 
     def __get_workflow_id(
         self,
@@ -371,7 +379,7 @@ class DLTFilePipeline(DLTPipeline):
             quarantine_rules = f'NOT(({") AND (".join(expectations.values())}))'
 
         @dlt.table(
-            comment=f"Source system: {self.source_system}, entity: {self.entity}, data owner: {self.data_owner}",
+            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
             name=f"bronze_{self.entity}",
             table_properties={
                 "quality": "bronze",
@@ -409,8 +417,8 @@ class DLTEventPipeline(DLTPipeline):
         source_system,
         entity,
         catalog,
-        data_owner,
         databricks_token,
+        tags = None,
         databricks_host = None,
         source_path = None
         ):
@@ -421,8 +429,8 @@ class DLTEventPipeline(DLTPipeline):
             source_system,
             entity,
             catalog,
-            data_owner,
             databricks_token,
+            tags,
             databricks_host,
             source_path,
             continuous_workflow = True
@@ -464,7 +472,7 @@ class DLTEventPipeline(DLTPipeline):
         }
 
         @dlt.create_table(
-            comment=f"Source system: {self.source_system}, entity: {self.entity}, data owner: {self.data_owner}",
+            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
             name=f"bronze_{self.entity}",
             table_properties={
                 "quality": "bronze",
