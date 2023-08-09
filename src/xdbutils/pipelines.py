@@ -69,7 +69,7 @@ class DLTPipeline():
         )
         @dlt.expect_all(expectations)
         def dlt_table():
-            
+
             silver_df = ( 
                 dlt.read(f"bronze_{self.entity}")
                 .transform(parse)
