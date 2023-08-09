@@ -417,8 +417,8 @@ class DLTEventPipeline(DLTPipeline):
         source_system,
         entity,
         catalog,
-        databricks_token,
         tags = None,
+        databricks_token = None,
         databricks_host = None,
         source_path = None
         ):
@@ -429,8 +429,8 @@ class DLTEventPipeline(DLTPipeline):
             source_system,
             entity,
             catalog,
-            databricks_token,
             tags,
+            databricks_token,
             databricks_host,
             source_path,
             continuous_workflow = True
