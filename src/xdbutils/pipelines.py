@@ -102,12 +102,17 @@ class DLTPipeline():
         @dlt.view(name=f"view_silver_{self.entity}")
         @dlt.expect_all(expectations)
         def dlt_view():
-            return (
+            silver_df = (
                 dlt.read_stream(f"bronze_{self.entity}")
                 .transform(parse)
                 .where(col("_quarantined") == lit(False))
                 .drop("_quarantined")
             )
+
+            if "_rescued_data" in silver_df.schema.fieldNames():
+                silver_df = silver_df.drop("_rescued_data")
+
+            return silver_df
 
         dlt.create_streaming_table(
             name=f"silver_{self.entity}",
@@ -156,12 +161,17 @@ class DLTPipeline():
         @dlt.view(name=f"view_silver_{self.entity}_changes")
         @dlt.expect_all(expectations)
         def dlt_view():
-            return (
+            silver_df = (
                 dlt.read_stream(f"bronze_{self.entity}")
                 .transform(parse)
                 .where(col("_quarantined") == lit(False))
                 .drop("_quarantined")
             )
+
+            if "_rescued_data" in silver_df.schema.fieldNames():
+                silver_df = silver_df.drop("_rescued_data")
+
+            return silver_df
 
         dlt.create_streaming_table(
             name=f"silver_{self.entity}_changes",
