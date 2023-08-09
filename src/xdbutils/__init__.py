@@ -33,8 +33,8 @@ class XDBUtils():
         source_system,
         entity,
         catalog,
-        tags,
-        databricks_token,
+        tags = None,
+        databricks_token = None,
         databricks_host = None,
         source_path = None
         ):
@@ -58,8 +58,8 @@ class XDBUtils():
         source_system,
         entity,
         catalog,
-        tags,
-        databricks_token,
+        tags = None,
+        databricks_token = None,
         databricks_host = None,
         source_path = None
         ):
