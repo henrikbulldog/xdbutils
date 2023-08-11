@@ -381,7 +381,7 @@ This will create the tables `<catalog>.<source system>.gold_<entity>_<name>`, fo
 ## Event-Based ingestion
 This section shows how to set up a pipeline the ingests data from an event hub.
 
-See also example notebook: [dlt_testeventhub_test.ipynb](https://github.com/henrikbulldog/xdbutils/blob/main/dlt_testeventhub_test.ipynb)
+See also example notebook: [dlt_testeventhub_clickviews.ipynb](https://github.com/henrikbulldog/xdbutils/blob/main/dlt_testeventhub_clickviews.ipynb)
 
 ### Create the Pipeline
 Calling the method XDBUtils.create_dlt_event_pipeline() will create or update a continuous DLT workflow. The workflow will be named `<source_system>-<entity>`.
@@ -546,17 +546,17 @@ pipeline.bronze_to_silver(
 This will create the table `<catalog>.<source system>.silver_<entity>`, for example `testing_dlt.testeventhub.silver_clickviews`.
 
 ```
-+-------------------+------------+------+---------+----+---------------+-----------+-------+-------+------------------+-------------------+-------------+----------+----------+------+-----------+
-|timeStamp          |ipAddress   |userId|sessionId|path|queryParameters|referrerUrl|os     |browser|timeToCompletePage|eventFirstTimestamp|eventDuration|eventScore|deviceType|isLead|diagnostics|
-+-------------------+------------+------+---------+----+---------------+-----------+-------+-------+------------------+-------------------+-------------+----------+----------+------+-----------+
-|2020-12-29 9:30:20 |123.45.60.45|...   |...      |... |...            |...        |Windows|Chrome |2100              |365476             |1000         |95        |phone     |true  |           |
-|2020-12-25 10:12:23|192.45.30.90|...   |...      |... |...            |...        |iOS    |Safari |1800              |236620             |1400         |80        |laptop    |false |Debug Info |
-|2020-11-29 11:45:11|87.20.10.12 |...   |...      |... |...            |...        |Android|firefox|2400              |389177             |800          |45        |tablet    |false |null       |
-|2020-10-22 8:18:16 |45.30.12.90 |...   |...      |... |...            |...        |Windows|Chrome |2000              |632736             |1500         |70        |phone     |false |null       |
-|2020-09-11 12:30:51|192.19.80.30|...   |...      |... |...            |...        |iOS    |Safari |2800              |436273             |600          |60        |laptop    |true  |null       |
-|2020-08-31 7:45:45 |5.60.20.67  |...   |...      |... |...            |...        |Android|firefox|2700              |749377             |200          |20        |tablet    |false |Debug Info |
-|2020-07-25 9:15:25 |90.12.45.67 |...   |...      |... |...            |...        |Windows|Chrome |3700              |426368             |1900         |50        |phone     |false |null       |
-+-------------------+------------+------+---------+----+---------------+-----------+-------+-------+------------------+-------------------+-------------+----------+----------+------+-----------+
++-------------------+------------+------------------------------------+------------------------------------+----------------------------------+-------------------+--------------------------------+-------+-------+------------------+-------------------+-------------+----------+----------+------+-----------+
+|timeStamp          |ipAddress   |userId                              |sessionId                           |path                              |queryParameters    |referrerUrl                     |os     |browser|timeToCompletePage|eventFirstTimestamp|eventDuration|eventScore|deviceType|isLead|diagnostics|
++-------------------+------------+------------------------------------+------------------------------------+----------------------------------+-------------------+--------------------------------+-------+-------+------------------+-------------------+-------------+----------+----------+------+-----------+
+|2020-12-29 9:30:20 |123.45.60.45|469b775c-6ab0-48ce-b321-08dc26c3b6cf|a7f4b4bb-1107-4a35-b1dd-fb666de8edc7|/.netlify/functions/registration  |?token=12345-ABCD  |http://example.com/about.html   |Windows|Chrome |2100              |365476             |1000         |95        |phone     |true  |           |
+|2020-12-25 10:12:23|192.45.30.90|178f1cf3-effb-4d07-8c2f-3a5909724164|858560da-bb43-4f37-8c30-8e71d7ef71bb|/.netlify/functions/productListing|?category=furniture|http://example.com/product.html |iOS    |Safari |1800              |236620             |1400         |80        |laptop    |false |Debug Info |
+|2020-11-29 11:45:11|87.20.10.12 |be845ccb-adf1-4ef7-b194-b620f2e309c9|824394ec-bfb4-4f4c-8e3a-c55ccd9fa7c0|/.netlify/functions/contact       |?from=homePage     |http://example.com/index.html   |Android|firefox|2400              |389177             |800          |45        |tablet    |false |null       |
+|2020-10-22 8:18:16 |45.30.12.90 |8476054a-f9ca-4882-9e10-355ae7c0054b|171599e6-ec9d-4ac6-8f6c-2cefbfccad00|/.netlify/functions/registration  |?token=54321-DCBA  |http://example.com/register.html|Windows|Chrome |2000              |632736             |1500         |70        |phone     |false |null       |
+|2020-09-11 12:30:51|192.19.80.30|3a3b6649-9741-4750-8829-6db0b1f65c9a|996a7dde-90fe-48d2-8cb8-1c73837b9c44|/.netlify/functions/missingPage   |?from=randomLink   |http://example.com/articles.html|iOS    |Safari |2800              |436273             |600          |60        |laptop    |true  |null       |
+|2020-08-31 7:45:45 |5.60.20.67  |3da8f619-8468-486c-bffd-abfaffe6f99e|ac6ac571-6f35-4bd1-a980-706dc00f7ece|/.netlify/functions/productListing|?category=toys     |http://example.com/category.html|Android|firefox|2700              |749377             |200          |20        |tablet    |false |Debug Info |
+|2020-07-25 9:15:25 |90.12.45.67 |31ceebd2-0273-4841-9bf9-316e7bed8845|531d32f2-502e-41f9-9451-3fcdac6ac1ba|/.netlify/functions/contact       |?from=socialMedia  |http://example.com/contact.html |Windows|Chrome |3700              |426368             |1900         |50        |phone     |false |null       |
++-------------------+------------+------------------------------------+------------------------------------+----------------------------------+-------------------+--------------------------------+-------+-------+------------------+-------------------+-------------+----------+----------+------+-----------+
 ```
 
 
