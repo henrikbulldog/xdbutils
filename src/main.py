@@ -33,7 +33,7 @@ try:
     for f in dbutils.fs.ls(path):
         print(f.name)
 except Exception as exc:
-    print(exc)
+    print("Looks like ABFS driver doesn't work with Databricks Connect: ", exc)
 
 
 try:

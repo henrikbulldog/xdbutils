@@ -1,16 +1,22 @@
 """ Delta Live Tables Pipelines """
 
 from typing import Callable
-from enum import IntEnum
 import urllib
 import requests
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, current_timestamp, expr, lit
-import dlt  # pylint: disable=import-error
+try:
+    import dlt  # pylint: disable=import-error
+except ImportError:
+    from unittest.mock import MagicMock
+    class MockDlt:
+        """ Mock dlt module, only works in Databricks notebooks """
+        def __getattr__(self, name):
+            return MagicMock()
 
-class ScdType(IntEnum):
-    ONE = 1
-    TWO = 1
+        def __call__(self, *args, **kwargs):
+            return MagicMock()
+    dlt = MockDlt()
 
 
 class DLTPipeline():
@@ -48,155 +54,6 @@ class DLTPipeline():
             databricks_host=databricks_host,
             source_path=source_path
             )
-
-    def bronze_to_silver(
-        self,
-        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-        expectations = None
-        ):
-        """ Bronze to Silver, append-only """
-
-        if not expectations:
-            expectations = {}
-
-        @dlt.table(
-            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
-            name=f"silver_{self.entity}",
-            table_properties={
-                "quality": "silver",
-                "pipelines.reset.allowed": "false"
-            },
-        )
-        @dlt.expect_all(expectations)
-        def dlt_table():
-
-            silver_df = ( 
-                dlt.read(f"bronze_{self.entity}")
-                .transform(parse)
-                .where(col("_quarantined") == lit(False))
-                .drop("_quarantined")
-            )
-
-            if "_rescued_data" in silver_df.schema.fieldNames():
-                silver_df = silver_df.drop("_rescued_data")
-
-            return silver_df
-
-    def bronze_to_silver_upsert(
-        self,
-        keys,
-        sequence_by = "_ingest_time",
-        ignore_null_updates = False,
-        apply_as_deletes = None,
-        apply_as_truncates = None,
-        column_list = None,
-        except_column_list = None,
-        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-        expectations = None
-        ):
-        """ Bronze to Silver, upsert """
-
-        if not expectations:
-            expectations = {}
-
-        @dlt.view(name=f"view_silver_{self.entity}")
-        @dlt.expect_all(expectations)
-        def dlt_view():
-            silver_df = (
-                dlt.read_stream(f"bronze_{self.entity}")
-                .transform(parse)
-                .where(col("_quarantined") == lit(False))
-                .drop("_quarantined")
-            )
-
-            if "_rescued_data" in silver_df.schema.fieldNames():
-                silver_df = silver_df.drop("_rescued_data")
-
-            return silver_df
-
-        dlt.create_streaming_table(
-            name=f"silver_{self.entity}",
-            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
-            table_properties={
-                "quality": "bronze",
-                "pipelines.reset.allowed": "false"
-            },
-            )
-
-        dlt.apply_changes(
-            target=f"silver_{self.entity}",
-            source=f"view_silver_{self.entity}",
-            keys=keys,
-            sequence_by=col(sequence_by),
-            ignore_null_updates=ignore_null_updates,
-            apply_as_deletes=apply_as_deletes,
-            apply_as_truncates=apply_as_truncates,
-            column_list=column_list,
-            except_column_list=except_column_list,
-            )
-
-    def bronze_to_silver_track_changes(
-        self,
-        keys,
-        sequence_by = "_ingest_time",
-        stored_as_scd_type = "2",
-        ignore_null_updates = False,
-        apply_as_deletes = None,
-        apply_as_truncates = None,
-        column_list = None,
-        except_column_list = None,
-        track_history_column_list = None,
-        track_history_except_column_list = None,
-        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-        expectations = None
-        ):
-        """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
-
-        if not expectations:
-            expectations = {}
-
-        if not track_history_except_column_list:
-            track_history_except_column_list = [sequence_by]
-
-        @dlt.view(name=f"view_silver_{self.entity}_changes")
-        @dlt.expect_all(expectations)
-        def dlt_view():
-            silver_df = (
-                dlt.read_stream(f"bronze_{self.entity}")
-                .transform(parse)
-                .where(col("_quarantined") == lit(False))
-                .drop("_quarantined")
-            )
-
-            if "_rescued_data" in silver_df.schema.fieldNames():
-                silver_df = silver_df.drop("_rescued_data")
-
-            return silver_df
-
-        dlt.create_streaming_table(
-            name=f"silver_{self.entity}_changes",
-            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
-            table_properties={
-                "quality": "bronze",
-                "pipelines.reset.allowed": "false"
-            },
-            )
-
-        dlt.apply_changes(
-            target=f"silver_{self.entity}_changes",
-            source=f"view_silver_{self.entity}_changes",
-            keys=keys,
-            sequence_by=col(sequence_by),
-            stored_as_scd_type=stored_as_scd_type,
-            ignore_null_updates=ignore_null_updates,
-            apply_as_deletes=apply_as_deletes,
-            apply_as_truncates=apply_as_truncates,
-            column_list=column_list,
-            except_column_list=except_column_list,
-            track_history_column_list=track_history_column_list,
-            track_history_except_column_list=track_history_except_column_list
-            )
-
     def silver_to_gold(
         self,
         name,
@@ -422,6 +279,120 @@ class DLTFilePipeline(DLTPipeline):
 
             return result_df
 
+    def bronze_to_silver(
+        self,
+        keys,
+        sequence_by = "_ingest_time",
+        ignore_null_updates = False,
+        apply_as_deletes = None,
+        apply_as_truncates = None,
+        column_list = None,
+        except_column_list = None,
+        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+        expectations = None
+        ):
+        """ Bronze to Silver, upsert """
+
+        if not expectations:
+            expectations = {}
+
+        @dlt.view(name=f"view_silver_{self.entity}")
+        @dlt.expect_all(expectations)
+        def dlt_view():
+            silver_df = (
+                dlt.read_stream(f"bronze_{self.entity}")
+                .transform(parse)
+                .where(col("_quarantined") == lit(False))
+                .drop("_quarantined")
+            )
+
+            if "_rescued_data" in silver_df.schema.fieldNames():
+                silver_df = silver_df.drop("_rescued_data")
+
+            return silver_df
+
+        dlt.create_streaming_table(
+            name=f"silver_{self.entity}",
+            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
+            table_properties={
+                "quality": "bronze",
+                "pipelines.reset.allowed": "false"
+            },
+            )
+
+        dlt.apply_changes(
+            target=f"silver_{self.entity}",
+            source=f"view_silver_{self.entity}",
+            keys=keys,
+            sequence_by=col(sequence_by),
+            ignore_null_updates=ignore_null_updates,
+            apply_as_deletes=apply_as_deletes,
+            apply_as_truncates=apply_as_truncates,
+            column_list=column_list,
+            except_column_list=except_column_list,
+            )
+
+    def bronze_to_silver_track_changes(
+        self,
+        keys,
+        sequence_by = "_ingest_time",
+        ignore_null_updates = False,
+        apply_as_deletes = None,
+        apply_as_truncates = None,
+        column_list = None,
+        except_column_list = None,
+        track_history_column_list = None,
+        track_history_except_column_list = None,
+        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+        expectations = None
+        ):
+        """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
+
+        if not expectations:
+            expectations = {}
+
+        if not track_history_except_column_list:
+            track_history_except_column_list = [sequence_by]
+
+        @dlt.view(name=f"view_silver_{self.entity}_changes")
+        @dlt.expect_all(expectations)
+        def dlt_view():
+            silver_df = (
+                dlt.read_stream(f"bronze_{self.entity}")
+                .transform(parse)
+                .where(col("_quarantined") == lit(False))
+                .drop("_quarantined")
+            )
+
+            if "_rescued_data" in silver_df.schema.fieldNames():
+                silver_df = silver_df.drop("_rescued_data")
+
+            return silver_df
+
+        dlt.create_streaming_table(
+            name=f"silver_{self.entity}_changes",
+            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
+            table_properties={
+                "quality": "bronze",
+                "pipelines.reset.allowed": "false"
+            },
+            )
+
+        dlt.apply_changes(
+            target=f"silver_{self.entity}_changes",
+            source=f"view_silver_{self.entity}_changes",
+            keys=keys,
+            sequence_by=col(sequence_by),
+            stored_as_scd_type="2",
+            ignore_null_updates=ignore_null_updates,
+            apply_as_deletes=apply_as_deletes,
+            apply_as_truncates=apply_as_truncates,
+            column_list=column_list,
+            except_column_list=except_column_list,
+            track_history_column_list=track_history_column_list,
+            track_history_except_column_list=track_history_except_column_list
+            )
+
 
 class DLTEventPipeline(DLTPipeline):
     """ Delta Live Tables Event Pipeline """
@@ -511,3 +482,37 @@ class DLTEventPipeline(DLTPipeline):
                 result_df = result_df.withColumn("_quarantined", expr(quarantine_rules))
             
             return result_df
+
+
+    def bronze_to_silver(
+        self,
+        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+        expectations = None
+        ):
+        """ Bronze to Silver, append-only """
+
+        if not expectations:
+            expectations = {}
+
+        @dlt.table(
+            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
+            name=f"silver_{self.entity}",
+            table_properties={
+                "quality": "silver",
+                "pipelines.reset.allowed": "false"
+            },
+        )
+        @dlt.expect_all(expectations)
+        def dlt_table():
+
+            silver_df = ( 
+                dlt.read(f"bronze_{self.entity}")
+                .transform(parse)
+                .where(col("_quarantined") == lit(False))
+                .drop("_quarantined")
+            )
+
+            if "_rescued_data" in silver_df.schema.fieldNames():
+                silver_df = silver_df.drop("_rescued_data")
+
+            return silver_df
