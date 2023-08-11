@@ -9,19 +9,18 @@ The package is built for Databricks runtime 13.0 or higher.
 Table of contents:
 - [Installing the library in a Databricks notebook](#installing-the-library-in-a-databricks-notebook)
 - [Using the Delta Live Tables (DLT) Framework](#using-the-delta-live-tables-dlt-framework)
-  * [File-based batch ingestion of append-only data](#file-based-batch-ingestion-of-append-only-data)
-    + [Create the Pipeline](#create-the-pipeline)
-    + [Create test data](#create-test-data)
-    + [Raw to bronze](#raw-to-bronze)
-    + [Bronze to Silver with append-only](#bronze-to-silver-with-append-only)
+  * [File-based batch ingestion](#file-based-batch-ingestion)
+    + [Create Test Data](#create-test-data)
+    + [Raw to Bronze](#raw-to-bronze)
+    + [Bronze to Silver](#bronze-to-silver)
     + [Silver to Gold](#silver-to-gold)
-  * [File-based batch ingestion of a slow changing dimension](#file-based-batch-ingestion-of-a-slow-changing-dimension)
-    + [Create Test data](#create-test-data-1)
-    + [Raw to bronze](#raw-to-bronze-1)
-    + [Bronze to Silver with Upsert](#bronze-to-silver-with-upsert)
-    + [Silver to Gold](#silver-to-gold-1)
   * [Event-Based Ingestion](#event-based-ingestion)
+    + [Event to Bronze](#event-to-bronze)
+    + [Bronze to Silver](#bronze-to-silver-1)
 - [Using the Data Lakehouse Framework (straight up python)](#using-the-data-lakehouse-framework)
+    + [Create Test Data](#create-test-data-1)
+    + [Raw to Bronze](#raw-to-bronze-1)
+    + [Bronze to Silver](#bronze-to-silver-2)
 - [Using Databricks Connect](#using-databricks-connect)
 
 # Installing the library in a Databricks notebook
@@ -33,270 +32,17 @@ Just pip install directly from the repo:
 
 # Using the Delta Live Tables (DLT) Framework
 In order to set up a Delta Live Tables pipeline, simply create a python notebook in Databricks and, depending on the use case, call one of the methods
-- XDBUtils.create_dlt_batch_pipeline()
-- XDBUtils.create_dlt_event_pipeline()
-
-Here is a couple of example pipelines based on common use cases:
-- File-based batch ingestion of append-only data
-- File-based batch ingestion of a slow changing dimension
-- Event-based ingestion
-
-## File-based batch ingestion of append-only data
-This section shows how to set up a batch pipeline for data that never changes, i.e. measurements or logs.
-
-See also example notebook: [dlt_eds_co2emis.ipynb](https://github.com/henrikbulldog/xdbutils/blob/main/dlt_eds_co2emis.ipynb)
-
-### Create the Pipeline
-You can set up DTL to monitor a raw folder and ingest new files as they arrive.
-Calling the method XDBUtils.create_dlt_batch_pipeline() will create or update a DLT workflow of type batch. 
-The workflow will be named `<source_system>-<entity>`.
-
-```python
-from xdbutils import XDBUtils
-
-xdbutils = XDBUtils(spark, dbutils)
-
-pipeline = xdbutils.create_dlt_batch_pipeline(
-  source_system="eds",
-  entity="co2emis",
-  catalog="testing_dlt",
-  tags={
-    "data_owner": "Henrik Thomsen",
-    "cost_center": "123456",
-    "documentation": "https://github.com/henrikbulldog/xdbutils"
-  },
-  databricks_token=dbutils.secrets().get(scope="<scope>", key="<key>")
-)
-```
-
-XDBUtils.create_dlt_batch_pipeline() parameters:
-
-|Parameter|Description|
-|---------|-----------|
-|**source_system**|Source system, this name will be used to create a schema in Unity Catalog|
-|**catalog**|Name of Unity Catalog to use|
-|tags|Tags will be added to the DTL workflow configuration and to Delta table description in Data Explorer|
-|databricks_token|A Databricks access token for [authentication to the Databricks API](https://docs.databricks.com/en/dev-tools/auth.html#databricks-personal-access-token-authentication)|
-|databricks_host|If omitted, the framework will get the host from the calling notebook context|
-|source_path|If omitted, the framework will use the path to the calling notebook|
-
-The code above will create a DLT workflow with this definition:
-
-```json
-{
-    "id": "...",
-    "pipeline_type": "WORKSPACE",
-    "clusters": [
-        {
-            "label": "default",
-            "autoscale": {
-                "min_workers": 1,
-                "max_workers": 2,
-                "mode": "ENHANCED"
-            }
-        }
-    ],
-    "development": true,
-    "continuous": false,
-    "channel": "PREVIEW",
-    "libraries": [
-        {
-            "notebook": {
-                "path": ".../DLT/eds/co2emis/dlt_eds_co2emis"
-            }
-        }
-    ],
-    "name": "eds-co2emis",
-    "edition": "ADVANCED",
-    "catalog": "testing_dlt",
-    "configuration": {
-        "pipelines.enableTrackHistory": "true",
-        "data_owner": "Henrik Thomsen",
-        "cost_center": "123456",
-        "documentation": "https://github.com/henrikbulldog/xdbutils",
-        "Source system": "eds",
-        "Entity": "co2emis"
-    },
-    "target": "eds"
-}
-```
-### Create test data
-Let's get some data from a public API and save the payload in a json file:
-
-```
-curl --location 'https://api.energidataservice.dk/dataset/CO2Emis?start=2023-01-01T00%3A00&end=2023-01-02T00%3A00'
-```
-
-Response payload should look something like this:
-
-```json
-{
-    "total": 576,
-    "dataset": "CO2Emis",
-    "records": [
-        {
-            "Minutes5UTC": "2023-01-01T22:55:00",
-            "Minutes5DK": "2023-01-01T23:55:00",
-            "PriceArea": "DK1",
-            "CO2Emission": 68.000000
-        },
-        {
-            "Minutes5UTC": "2023-01-01T22:55:00",
-            "Minutes5DK": "2023-01-01T23:55:00",
-            "PriceArea": "DK2",
-            "CO2Emission": 68.000000
-        },
-        {
-            "Minutes5UTC": "2023-01-01T22:50:00",
-            "Minutes5DK": "2023-01-01T23:50:00",
-            "PriceArea": "DK1",
-            "CO2Emission": 67.000000
-        },
-        {
-            "Minutes5UTC": "2023-01-01T22:50:00",
-            "Minutes5DK": "2023-01-01T23:50:00",
-            "PriceArea": "DK2",
-            "CO2Emission": 67.000000
-        },
-      ...
-    ]
-}
-```
-
-### Raw to bronze
-In order to ingest data from raw to bronze, call raw_to_bronze() with parameters:
-
-|Parameter|Description|
-|---------|-----------|
-|**raw_base_path**|Base path to raw data files. The framework will look for files in `raw_base_path/<source_system>/<entity>`|
-|**raw_format**|Raw data format; json, csv, parquet|
-|options|Read options, i.e. {"header": True}|
-|expectations|[DLT expectations](https://docs.databricks.com/en/delta-live-tables/expectations.html), rows that do not meet expectations will be marked as quarantined|
+- File-based batch ingestion: XDBUtils.create_dlt_batch_pipeline()
+- Event-based ingestion: XDBUtils.create_dlt_event_pipeline()
 
 
-DLT will maintain checkpoints in `<raw_base_path>/checkpoints` so that only new data is ingested.
-
-```python
-pipeline.raw_to_bronze(
-  raw_base_path="dbfs:/FileStore/datalakehouse/raw",
-  raw_format="json",
-  expectations={
-    "Valid dataset": "dataset = 'CO2Emis'",
-    "Valid data": "records IS NOT NULL AND array_size(records) > 1",
-    }
-)
-```
-
-This will create the table `<catalog>.<source system>.bronze_<entity>`, for example `testing_dlt.eds.bronze_co2emis`:
-
-```
-+-------+-------+-----+-------------+-----------------------+------------+
-|dataset|records|total|_rescued_data|_ingest_time           |_quarantined|
-+-------+-------+-----+-------------+-----------------------+------------+
-|CO2Emis|...    |576  |null         |2023-08-10 12:07:10.079|false       |
-+-------+-------+-----+-------------+-----------------------+------------+
-```
-
-Bronze metadata columns:
-
-|Column|Description|
-|---------|-----------|
-|_rescued_data|DLT adds this column when inferring schema from json and csv. The column contains information about failed schema ingestion attempts|
-|_ingest_time|Time of ingestion|
-|_quarantined|False if expectations are met, True if not|
-
-### Bronze to Silver with append-only
-Call bronze_to_silver() with parameters:
-
-|Parameter|Description|
-|---------|-----------|
-|parse|A function that transforms imput data. It takes a DataFrame as input and returns a DataFrame|
-|expectations|[DLT expectations](https://docs.databricks.com/en/delta-live-tables/expectations.html)|
-
-```python
-from pyspark.sql.functions import explode, col
-
-pipeline.bronze_to_silver(
-  parse=lambda df: (
-    df
-    .withColumn("record", explode("records"))
-    .select(
-      col("record.CO2Emission").alias("value"),
-      col("record.Minutes5UTC").cast("timestamp").alias("timestamp"),
-      col("record.PriceArea").alias("price_area"),
-      )
-    ),
-  expectations={
-    "valid_timestamp": "timestamp IS NOT NULL",
-    "valid_value": "value IS NOT NULL"
-    }
-  )
-```
-
-This will create the table `<catalog>.<source system>.silver_<entity>`, for example `testing_dlt.eds.silver_co2emis`.
-
-```
-+-----+-------------------+----------+
-|value|timestamp          |price_area|
-+-----+-------------------+----------+
-|68.0 |2023-01-01 22:55:00|DK1       |
-|68.0 |2023-01-01 22:55:00|DK2       |
-|67.0 |2023-01-01 22:50:00|DK1       |
-|67.0 |2023-01-01 22:50:00|DK2       |
-...
-```
-
-### Silver to Gold
-Call silver_to_gold() with silver to gold transformation method, with parameters:
-
-|Parameter|Description|
-|---------|-----------|
-|**name**|Gold table name prefix as in `gold_<entity>_<name>`, i.e. gold_co2emis_top_10|
-|parse|A function that transforms imput data. It takes a DataFrame as input and returns a DataFrame|
-|expectations|[DLT expectations](https://docs.databricks.com/en/delta-live-tables/expectations.html)|
-
-
-```python
-pipeline.silver_to_gold(
-  name="top_10",
-  parse=lambda df: (
-    df
-      .where(col("price_area") == lit("DK1"))
-      .orderBy(col("value").desc())
-      .limit(10)
-      .select("value", "timestamp")
-  )
-)
-```
-This will create the table `<catalog>.<source system>.gold_<entity>_<name>`, for example `testing_dlt.eds.gold_co2emis_top_10`.
-
-```
-+-----+-------------------+
-|value|timestamp          |
-+-----+-------------------+
-|227.0|2022-12-31 23:00:00|
-|224.0|2022-12-31 23:05:00|
-|222.0|2022-12-31 23:10:00|
-|220.0|2022-12-31 23:15:00|
-|212.0|2022-12-31 23:20:00|
-|207.0|2022-12-31 23:25:00|
-|203.0|2022-12-31 23:30:00|
-|196.0|2022-12-31 23:35:00|
-|191.0|2022-12-31 23:40:00|
-|182.0|2022-12-31 23:45:00|
-+-----+-------------------+
-```
-
-
-## File-based batch ingestion of a slow changing dimension
-This section shows how to set up a batch pipeline for data that changes over time, i.e. a database of employees or other transactional business data.
+## File-based batch ingestion
+This section shows how to set up a pipeline for ingesting files that is scheduled to run at intervals. Only newly arrived files are processed (DLT uses AutoLoader to kep track of new files).
 
 See also example notebook: [dlt_testcdc_employee.ipynb](https://github.com/henrikbulldog/xdbutils/blob/main/dlt_testcdc_employee.ipynb)
 
 ### Create the Pipeline
-You can set up DTL to monitor a raw folder and ingest new files as they arrive.
-Calling the method XDBUtils.create_dlt_batch_pipeline() will create or update a DLT workflow of type batch. 
-The workflow will be named `<source_system>-<entity>`.
+Calling the method XDBUtils.create_dlt_batch_pipeline() will create or update a non-contiuous (scheduled) DLT workflow. The workflow will be named `<source_system>-<entity>`.
 
 ```python
 from xdbutils import XDBUtils
@@ -367,6 +113,7 @@ The code above will create a DLT workflow with this definition:
     "target": "testcdc"
 }
 ```
+
 ### Create Test data
 Let's create some test data:
 
@@ -459,7 +206,7 @@ Test data:
 +-----+--------+-----------+---------+--------------------------+
 ```
 
-### Raw to bronze
+### Raw to Bronze
 In order to ingest data from raw to bronze, call raw_to_bronze() with parameters:
 
 |Parameter|Description|
@@ -506,13 +253,13 @@ Bronze metadata columns:
 |_ingest_time|Time of ingestion|
 |_quarantined|False if expectations are met, True if not|
 
-### Bronze to Silver with Upsert
-Call bronze_to_silver_upsert() with parameters (see also [DLT docs](https://docs.databricks.com/en/delta-live-tables/python-ref.html#change-data-capture-with-python-in-delta-live-tables)):
+### Bronze to Silver
+Call bronze_to_silver() with parameters (see also [DLT docs](https://docs.databricks.com/en/delta-live-tables/python-ref.html#change-data-capture-with-python-in-delta-live-tables)):
 
 |Parameter|Description|
 |---------|-----------|
-|**keys**|The column or combination of columns that uniquely identify a row in the source data. This is used to identify which CDC events apply to specific records in the target table|
-|**sequence_by**|The column name specifying the logical order of CDC events in the source data. Delta Live Tables uses this sequencing to handle change events that arrive out of order|
+|keys|If parameter keys is omitted, data wil be appended, otherwise data is upserted. The column or combination of columns that uniquely identify a row in the source data. This is used to identify which CDC events apply to specific records in the target table. |
+|sequence_by|sequence_by must be specified if keys is specified. sequence_by if the column name specifying the logical order of CDC events in the source data. Delta Live Tables uses this sequencing to handle change events that arrive out of order.|
 |ignore_null_updates|Allow ingesting updates containing a subset of the target columns. When a CDC event matches an existing row and ignore_null_updates is True, columns with a null will retain their existing values in the target. This also applies to nested columns with a value of null. When ignore_null_updates is False, existing values will be overwritten with null values|
 |apply_as_deletes|Specifies when a CDC event should be treated as a DELETE rather than an upsert. To handle out-of-order data, the deleted row is temporarily retained as a tombstone in the underlying Delta table, and a view is created in the metastore that filters out these tombstones. The retention interval can be configured with the pipelines.cdc.tombstoneGCThresholdInSeconds table property|
 |apply_as_truncates|Specifies when a CDC event should be treated as a full table TRUNCATE. Because this clause triggers a full truncate of the target table, it should be used only for specific use cases requiring this functionality|
@@ -632,11 +379,215 @@ This will create the tables `<catalog>.<source system>.gold_<entity>_<name>`, fo
 ```
 
 ## Event-Based ingestion
+This section shows how to set up a pipeline the ingests data from an event hub.
+
+See also example notebook: [dlt_testeventhub_test.ipynb](https://github.com/henrikbulldog/xdbutils/blob/main/dlt_testeventhub_test.ipynb)
+
+### Create the Pipeline
+Calling the method XDBUtils.create_dlt_event_pipeline() will create or update a continuous DLT workflow. The workflow will be named `<source_system>-<entity>`.
+
+```python
+from xdbutils import XDBUtils
+
+xdbutils = XDBUtils(spark, dbutils)
+
+pipeline = xdbutils.create_dlt_event_pipeline(
+  source_system="testeventhub",
+  entity="clickviews",
+  catalog="testing_dlt",
+  tags={
+    "data_owner": "Henrik Thomsen",
+    "cost_center": "123456",
+    "documentation": "https://github.com/henrikbulldog/xdbutils"
+  },
+  databricks_token=dbutils.secrets().get(scope="<scope>", key="<secret>")
+)
+```
+
+XDBUtils.create_dlt_event_pipeline() parameters:
+
+|Parameter|Description|
+|---------|-----------|
+|**source_system**|Source system, this name will be used to create a schema in Unity Catalog|
+|**catalog**|Name of Unity Catalog to use|
+|tags|Tags will be added to the DTL workflow configuration and to Delta table description in Data Explorer|
+|databricks_token|A Databricks access token for [authentication to the Databricks API](https://docs.databricks.com/en/dev-tools/auth.html#databricks-personal-access-token-authentication)|
+|databricks_host|If omitted, the framework will get the host from the calling notebook context|
+|source_path|If omitted, the framework will use the path to the calling notebook|
+
+The code above will create a DLT workflow with this definition:
+
+```json
+{
+    "id": "...",
+    "pipeline_type": "WORKSPACE",
+    "clusters": [
+        {
+            "label": "default",
+            "autoscale": {
+                "min_workers": 1,
+                "max_workers": 2,
+                "mode": "ENHANCED"
+            }
+        }
+    ],
+    "development": true,
+    "continuous": true,
+    "channel": "PREVIEW",
+    "libraries": [
+        {
+            "notebook": {
+                "path": ".../DLT/testeventhub/test/dlt_testeventhub_test"
+            }
+        }
+    ],
+    "name": "testeventhub-test",
+    "edition": "ADVANCED",
+    "catalog": "testing_dlt",
+    "configuration": {
+        "pipelines.enableTrackHistory": "true",
+        "data_owner": "Henrik Thomsen",
+        "cost_center": "123456",
+        "documentation": "https://github.com/henrikbulldog/xdbutils",
+        "Source system": "testeventhub",
+        "Entity": "clickviews"
+    },
+    "target": "testeventhub"
+}
+```
+
+### Event to Bronze
+In order to ingest data from an event hub to bronze, call event_to_bronze() with parameters:
+
+|Parameter|Description|
+|---------|-----------|
+|**eventhub_namespace**|Event hub namespace|
+|**eventhub_name**|Event hub name|
+|**eventhub_group_id**|Event hub group id|
+|**eventhub_connection_string**|Event hub connection string|
+|parse|A function that transforms imput data. It takes a DataFrame as input and returns a DataFrame|
+|partition_cols|An optional collection, for example, a list, of one or more columns to use for partitioning the table|
+|expectations|[DLT expectations](https://docs.databricks.com/en/delta-live-tables/expectations.html), rows that do not meet expectations will be marked as quarantined|
+
+
+```python
+pipeline.event_to_bronze(
+  eventhub_namespace="testeventhub",
+  eventhub_name="testihubi2",
+  eventhub_group_id="test-cg",
+  eventhub_connection_string=dbutils.secrets().get(scope="<scope>", key="<secret>")
+)
+```
+
+This will create the table <catalog>.<source system>.bronze_<entity>, for example testing_dlt.testeventhub.clickviews.
+
+```
++----+-----+----------+---------+------+----------------------+-------------+-----------------------+------------+
+|key |value|topic     |partition|offset|timestamp             |timestampType|_ingest_time           |_quarantined|
++----+-----+----------+---------+------+----------------------+-------------+-----------------------+------------+
+|null|...  |testihubi2|0        |364   |2023-08-11 11:43:14.07|0            |2023-08-11 11:43:16.087|false       |
+|null|...  |testihubi2|0        |365   |2023-08-11 11:43:14.07|0            |2023-08-11 11:43:16.087|false       |
+|null|...  |testihubi2|0        |366   |2023-08-11 11:43:14.07|0            |2023-08-11 11:43:16.087|false       |
+|null|...  |testihubi2|0        |367   |2023-08-11 11:43:14.07|0            |2023-08-11 11:43:16.087|false       |
+|null|...  |testihubi2|0        |368   |2023-08-11 11:43:14.07|0            |2023-08-11 11:43:16.087|false       |
+|null|...  |testihubi2|0        |369   |2023-08-11 11:43:14.07|0            |2023-08-11 11:43:16.087|false       |
+|null|...  |testihubi2|0        |370   |2023-08-11 11:43:14.07|0            |2023-08-11 11:43:16.087|false       |
++----+-----+----------+---------+------+----------------------+-------------+-----------------------+------------+
+```
+
+Bronze metadata columns:
+
+|Column|Description|
+|------|-----------|
+|_ingest_time|Time of ingestion|
+|_quarantined|False if expectations are met, True if not|
+
+### Bronze to Silver
+Call bronze_to_silver() with parameters (see also [DLT docs](https://docs.databricks.com/en/delta-live-tables/python-ref.html#change-data-capture-with-python-in-delta-live-tables)):
+
+|Parameter|Description|
+|---------|-----------|
+|parse|A function that transforms imput data. It takes a DataFrame as input and returns a DataFrame|
+|expectations|[DLT expectations](https://docs.databricks.com/en/delta-live-tables/expectations.html)|
+
+```python
+from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType
+from pyspark.sql.functions import col, from_json
+
+json_schema = StructType([  
+    StructField("timeStamp", StringType()),
+    StructField("ipAddress", StringType()),
+    StructField("userId", StringType()),
+    StructField("sessionId", StringType()),
+    StructField("path", StringType()),
+    StructField("queryParameters", StringType()),
+    StructField("referrerUrl", StringType()),
+    StructField("os", StringType()),
+    StructField("browser", StringType()),
+    StructField("timeToCompletePage", IntegerType()),
+    StructField("eventFirstTimestamp", IntegerType()),
+    StructField("eventDuration", IntegerType()),
+    StructField("eventScore", IntegerType()),
+    StructField("deviceType", StringType()),
+    StructField("isLead", BooleanType()),
+    StructField("diagnostics", StringType()),
+    ])
+
+pipeline.bronze_to_silver(
+  parse=lambda df: (
+    df
+    .select(from_json(col("value").cast(StringType()), json_schema).alias("payload"))
+    .select("payload.*")
+    .where(col("timestamp").isNotNull())
+  )
+)
+```
+
+This will create the table `<catalog>.<source system>.silver_<entity>`, for example `testing_dlt.testeventhub.silver_clickviews`.
+
+```
++-------------------+------------+------+---------+----+---------------+-----------+-------+-------+------------------+-------------------+-------------+----------+----------+------+-----------+
+|timeStamp          |ipAddress   |userId|sessionId|path|queryParameters|referrerUrl|os     |browser|timeToCompletePage|eventFirstTimestamp|eventDuration|eventScore|deviceType|isLead|diagnostics|
++-------------------+------------+------+---------+----+---------------+-----------+-------+-------+------------------+-------------------+-------------+----------+----------+------+-----------+
+|2020-12-29 9:30:20 |123.45.60.45|...   |...      |... |...            |...        |Windows|Chrome |2100              |365476             |1000         |95        |phone     |true  |           |
+|2020-12-25 10:12:23|192.45.30.90|...   |...      |... |...            |...        |iOS    |Safari |1800              |236620             |1400         |80        |laptop    |false |Debug Info |
+|2020-11-29 11:45:11|87.20.10.12 |...   |...      |... |...            |...        |Android|firefox|2400              |389177             |800          |45        |tablet    |false |null       |
+|2020-10-22 8:18:16 |45.30.12.90 |...   |...      |... |...            |...        |Windows|Chrome |2000              |632736             |1500         |70        |phone     |false |null       |
+|2020-09-11 12:30:51|192.19.80.30|...   |...      |... |...            |...        |iOS    |Safari |2800              |436273             |600          |60        |laptop    |true  |null       |
+|2020-08-31 7:45:45 |5.60.20.67  |...   |...      |... |...            |...        |Android|firefox|2700              |749377             |200          |20        |tablet    |false |Debug Info |
+|2020-07-25 9:15:25 |90.12.45.67 |...   |...      |... |...            |...        |Windows|Chrome |3700              |426368             |1900         |50        |phone     |false |null       |
++-------------------+------------+------+---------+----+---------------+-----------+-------+-------+------------------+-------------------+-------------+----------+----------+------+-----------+
+```
 
 
 # Using the Data Lakehouse Framework
+If you prefer to set up data pipelines with straight up pythoin rather than Delta Live Tables, you can use the method XDButils.create_datalakehouse().
 
-Copy data to raw:
+## Declare a DataLakeHouse
+Call XDButils.create_datalakehouse() with parameters:
+
+|Parameter|Description|
+|-|-|
+|raw_path|Base path to raw files|
+|bronze_path|Base path to bronze data|
+|silver_path|Base path to silver data|
+|gold_path|Base path to gold data|
+
+
+```python
+from xdbutils import XDBUtils
+
+xdbutils = XDBUtils(spark, dbutils)
+
+datalakehouse = xdbutils.create_datalakehouse(
+  raw_path="dbfs:/Datalakehouse/raw",
+  bronze_path="dbfs:/Datalakehouse/bronze",
+  silver_path="dbfs:/Datalakehouse/silver",
+  gold_path="dbfs:/Datalakehouse/gold"
+)
+```
+
+## Create Test Data
 
 ```python
 testdata = {
@@ -654,25 +605,11 @@ testdata = {
     ]
 }
 
-dbutils.fs.put("/tmp/raw/testdata.json", json.dumps(testdata), True)
+dbutils.fs.put("dbfs:/Datalakehouse/raw/eds/co2emis/testdata.json", json.dumps(testdata), True)
 ```
 
-Declare a datalakehouse
-
-```python
-from xdbutils import XDBUtils
-
-xdbutils = XDBUtils(spark, dbutils)
-
-datalakehouse = xdbutils.create_datalakehouse(
-  raw_path="dbfs:/tmp/raw",
-  bronze_path="<bronze path>",
-  silver_path="<silver path>",
-  gold_path="<gold path>",
-)
-```
-
-Declare a raw to bronze job: read from json, explode nested json to tabular and append data to bronze delta table:
+## Raw to Bronze
+Read from json, explode nested json to tabular and append data to bronze delta table:
 
 ```python
 from pyspark.sql.functions import explode
@@ -694,7 +631,8 @@ raw2bronze_job = (
 raw2bronze_job.run()
 ```
 
-Declare a bronze to silver job: read from bronze delta table, harmonize column names and append data to silver delta table:
+## Bronze to Silver
+Read from bronze delta table, harmonize column names and append data to silver delta table:
 
 ```python
 from pyspark.sql.functions import col
@@ -711,7 +649,7 @@ bronze2silver_job = (
       )
     )
   )
-  .write_append(table=source_entity, catalog="dev_helen_silver")
+  .write_append(table=source_entity, catalog="my_catalog")
 
 bronze2silver_job.run()    
 )
@@ -725,8 +663,11 @@ Install Docker.
 Databricks cluster runtime must be  Databricks Runtime 13.0 or 13.0 ML.
 
 Set environment variables on your local machine:
+
 ```
 DATABRICKS_HOST=https://<Databricks instance host url>
 DATABRICKS_TOKEN=<Databricks token from user settings>
 DATABRICKS_CLUSTER_ID=<Databricks cluster ID>
 ```
+
+See the folder .devcontainer for configuration of VS Code devcontainer wuth Databricks Connect
