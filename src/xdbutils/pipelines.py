@@ -190,9 +190,9 @@ def _create_workflow(
 
 def _bronze_to_silver_append(
     entity,
-    tags = None,
     parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-    expectations = None
+    expectations = None,
+    tags = None,
     ):
     """ Bronze to Silver, append-only """
 
@@ -228,15 +228,15 @@ def _bronze_to_silver_append(
 def _bronze_to_silver_upsert(
     entity,
     keys,
-    tags = None,
-    sequence_by = "_ingest_time",
+    sequence_by,
     ignore_null_updates = False,
     apply_as_deletes = None,
     apply_as_truncates = None,
     column_list = None,
     except_column_list = None,
     parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-    expectations = None
+    expectations = None,
+    tags = None,
     ):
     """ Bronze to Silver, upsert """
 
@@ -285,8 +285,7 @@ def _bronze_to_silver_upsert(
 def _bronze_to_silver_track_changes(
     entity,
     keys,
-    tags = None,
-    sequence_by = "_ingest_time",
+    sequence_by,
     ignore_null_updates = False,
     apply_as_deletes = None,
     apply_as_truncates = None,
@@ -295,7 +294,8 @@ def _bronze_to_silver_track_changes(
     track_history_column_list = None,
     track_history_except_column_list = None,
     parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-    expectations = None
+    expectations = None,
+    tags = None,
     ):
     """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
 
@@ -469,7 +469,7 @@ class DLTFilePipeline(DLTPipeline):
     def bronze_to_silver(
         self,
         keys = None,
-        sequence_by = "_ingest_time",
+        sequence_by = None,
         ignore_null_updates = False,
         apply_as_deletes = None,
         apply_as_truncates = None,
@@ -478,34 +478,39 @@ class DLTFilePipeline(DLTPipeline):
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
-        """ Bronze to Silver, upsert """
+        """ Bronze to Silver, append (if no keys) or upsert (if keys and sequence_by is specified) """
 
         if keys and len(keys) > 0:
+
+            if not sequence_by:
+                raise Exception("sequence_by must be specified for upserts")
+
             _bronze_to_silver_upsert(
                 entity=self.entity,
                 keys=keys,
                 sequence_by=sequence_by,
-                tags=self.tags,
                 ignore_null_updates=ignore_null_updates,
                 apply_as_deletes=apply_as_deletes,
                 apply_as_truncates=apply_as_truncates,
                 column_list=column_list,
                 except_column_list=except_column_list,
                 parse=parse,
-                expectations=expectations
+                expectations=expectations,
+                tags=self.tags,
             )
+
         else:
             _bronze_to_silver_append(
                 entity=self.entity,
-                tags=self.tags,
                 parse=parse,
-                expectations=expectations
+                expectations=expectations,
+                tags=self.tags,
             )
 
     def bronze_to_silver_track_changes(
         self,
         keys,
-        sequence_by = "_ingest_time",
+        sequence_by,
         ignore_null_updates = False,
         apply_as_deletes = None,
         apply_as_truncates = None,
@@ -634,7 +639,7 @@ class DLTEventPipeline(DLTPipeline):
 
         _bronze_to_silver_append(
             entity=self.entity,
-            tags=self.tags,
             parse=parse,
-            expectations=expectations
+            expectations=expectations,
+            tags=self.tags,
         )
