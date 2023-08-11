@@ -670,4 +670,4 @@ DATABRICKS_TOKEN=<Databricks token from user settings>
 DATABRICKS_CLUSTER_ID=<Databricks cluster ID>
 ```
 
-See the folder .devcontainer for configuration of VS Code devcontainer wuth Databricks Connect
+See the folder .devcontainer for configuration of VS Code devcontainer with Databricks Connect
