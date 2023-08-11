@@ -31,6 +31,29 @@ class PipelinesTestCase(unittest.TestCase):
 
         self.assertIsNotNone(pipeline)
 
+        pipeline.raw_to_bronze(
+            raw_base_path="...",
+            raw_format="json"
+            )
+
+        pipeline.bronze_to_silver(
+        )
+
+        pipeline.bronze_to_silver(
+            keys=["id"],
+            sequence_by="timestamp"
+        )
+
+        pipeline.bronze_to_silver_track_changes(
+            keys=["id"],
+            sequence_by="timestamp"
+        )
+
+        pipeline.silver_to_gold(
+            name="test_gold"
+        )
+
+
     def test_create_event_pipeline(self):
         """ Test create event pipeline """
 
@@ -48,6 +71,19 @@ class PipelinesTestCase(unittest.TestCase):
             )
 
         self.assertIsNotNone(pipeline)
+
+        pipeline.event_to_bronze(
+            eventhub_namespace="ns",
+            eventhub_group_id="gr",
+            eventhub_name="name",
+            eventhub_connection_string="conn str"
+            )
+
+        pipeline.bronze_to_silver()
+
+        pipeline.silver_to_gold(
+            name="test_gold"
+        )
 
 
 if __name__ == '__main__':

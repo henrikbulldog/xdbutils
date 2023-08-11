@@ -19,6 +19,334 @@ except ImportError:
     dlt = MockDlt()
 
 
+def _create_or_update_workflow(
+    dbutils,
+    source_system,
+    entity,
+    catalog,
+    continuous_workflow,
+    databricks_token,
+    databricks_host = None,
+    source_path = None,
+    tags = None
+    ):
+    """ Create Delta Live Tables Workflow """
+
+    if not tags:
+        tags = {}
+
+    try:
+        if not databricks_host:
+            databricks_host = (
+                dbutils
+                .notebook.entry_point.getDbutils()
+                .notebook().getContext()
+                .tags().get("browserHostName").get()
+            )
+
+        if not source_path:
+            source_path = (
+                dbutils.notebook.entry_point.getDbutils()
+                .notebook().getContext()
+                .notebookPath().get()
+            )
+
+        workflow_settings = _get_workflow_settings(
+            source_system=source_system,
+            entity=entity,
+            catalog=catalog,
+            source_path=source_path,
+            continuous_workflow=continuous_workflow,
+            tags=tags
+            )
+
+        pipeline_id = _get_workflow_id(
+            source_system=source_system,
+            entity=entity,
+            databricks_host=databricks_host,
+            databricks_token=databricks_token
+            )
+
+        if pipeline_id:
+            _update_workflow(
+                pipeline_id=pipeline_id,
+                workflow_settings=workflow_settings,
+                databricks_host=databricks_host,
+                databricks_token=databricks_token
+                )
+        else:
+            _create_workflow(
+                workflow_settings=workflow_settings,
+                databricks_host=databricks_host,
+                databricks_token=databricks_token
+                )
+    except:
+        # Cannot get information from notebook context, give up
+        return
+
+        
+def _get_workflow_settings(
+    source_system,
+    entity,
+    catalog,
+    source_path,
+    continuous_workflow,
+    tags = None
+    ):
+
+    if not tags:
+        tags = {}
+
+    settings = {
+        "name": f"{source_system}-{entity}",
+        "edition": "Advanced",
+        "development": True,
+        "clusters": [
+            {
+            "label": "default",
+            "autoscale": {
+                "min_workers": 1,
+                "max_workers": 2,
+                "mode": "ENHANCED"
+            }
+            }
+        ],
+        "channel": "PREVIEW",
+        "libraries": [
+            {
+            "notebook": {
+                "path": source_path
+            }
+            }
+        ],
+        "catalog": catalog,
+        "target": source_system,
+        "configuration": {
+            "pipelines.enableTrackHistory": "true"
+        },
+        "continuous": continuous_workflow
+    }
+
+    settings["configuration"].update(tags)
+
+    return settings
+
+def _get_workflow_id(
+    source_system,
+    entity,
+    databricks_host,
+    databricks_token
+    ):
+    name = f"{source_system}-{entity}"
+    params = urllib.parse.urlencode(
+        {"filter": f"name LIKE '{name}'"},
+        quote_via=urllib.parse.quote)
+
+    response = requests.get(
+        url=f"https://{databricks_host}/api/2.0/pipelines",
+        params=params,
+        headers={"Authorization": f"Bearer {databricks_token}"},
+        timeout=60
+        )
+
+    if response.status_code == 200:
+        payload = response.json()
+        if "statuses" in payload.keys():
+            if len(payload["statuses"]) == 1:
+                return payload["statuses"][0]["pipeline_id"]
+
+    return None
+
+def _update_workflow(
+    pipeline_id,
+    workflow_settings,
+    databricks_host,
+    databricks_token
+    ):
+
+    response = requests.put(
+        url=f"https://{databricks_host}/api/2.0/pipelines/{pipeline_id}",
+        json=workflow_settings,
+        headers={"Authorization": f"Bearer {databricks_token}"},
+        timeout=60
+        )
+
+    response.raise_for_status()
+
+def _create_workflow(
+    workflow_settings,
+    databricks_host,
+    databricks_token
+    ):
+
+    response = requests.post(
+        url=f"https://{databricks_host}/api/2.0/pipelines",
+        json=workflow_settings,
+        headers={"Authorization": f"Bearer {databricks_token}"},
+        timeout=60
+        )
+
+    response.raise_for_status()
+
+def _bronze_to_silver_append(
+    entity,
+    tags = None,
+    parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+    expectations = None
+    ):
+    """ Bronze to Silver, append-only """
+
+    if not tags:
+        tags = {}
+
+    if not expectations:
+        expectations = {}
+
+    @dlt.table(
+        comment=", ".join([f"{e}: {tags[e]}" for e in tags.keys()]),
+        name=f"silver_{entity}",
+        table_properties={
+            "quality": "silver",
+            "pipelines.reset.allowed": "false"
+        },
+    )
+    @dlt.expect_all(expectations)
+    def dlt_table():
+
+        silver_df = ( 
+            dlt.read(f"bronze_{entity}")
+            .transform(parse)
+            .where(col("_quarantined") == lit(False))
+            .drop("_quarantined")
+        )
+
+        if "_rescued_data" in silver_df.schema.fieldNames():
+            silver_df = silver_df.drop("_rescued_data")
+
+        return silver_df
+
+def _bronze_to_silver_upsert(
+    entity,
+    keys,
+    tags = None,
+    sequence_by = "_ingest_time",
+    ignore_null_updates = False,
+    apply_as_deletes = None,
+    apply_as_truncates = None,
+    column_list = None,
+    except_column_list = None,
+    parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+    expectations = None
+    ):
+    """ Bronze to Silver, upsert """
+
+    if not tags:
+        tags = {}
+
+    if not expectations:
+        expectations = {}
+
+    @dlt.view(name=f"view_silver_{entity}")
+    @dlt.expect_all(expectations)
+    def dlt_view():
+        silver_df = (
+            dlt.read_stream(f"bronze_{entity}")
+            .transform(parse)
+            .where(col("_quarantined") == lit(False))
+            .drop("_quarantined")
+        )
+
+        if "_rescued_data" in silver_df.schema.fieldNames():
+            silver_df = silver_df.drop("_rescued_data")
+
+        return silver_df
+
+    dlt.create_streaming_table(
+        name=f"silver_{entity}",
+        comment=", ".join([f"{e}: {tags[e]}" for e in tags.keys()]),
+        table_properties={
+            "quality": "bronze",
+            "pipelines.reset.allowed": "false"
+        },
+        )
+
+    dlt.apply_changes(
+        target=f"silver_{entity}",
+        source=f"view_silver_{entity}",
+        keys=keys,
+        sequence_by=col(sequence_by),
+        ignore_null_updates=ignore_null_updates,
+        apply_as_deletes=apply_as_deletes,
+        apply_as_truncates=apply_as_truncates,
+        column_list=column_list,
+        except_column_list=except_column_list,
+        )
+
+def _bronze_to_silver_track_changes(
+    entity,
+    keys,
+    tags = None,
+    sequence_by = "_ingest_time",
+    ignore_null_updates = False,
+    apply_as_deletes = None,
+    apply_as_truncates = None,
+    column_list = None,
+    except_column_list = None,
+    track_history_column_list = None,
+    track_history_except_column_list = None,
+    parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+    expectations = None
+    ):
+    """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
+
+    if not tags:
+        tags = {}
+
+    if not expectations:
+        expectations = {}
+
+    if not track_history_except_column_list:
+        track_history_except_column_list = [sequence_by]
+
+    @dlt.view(name=f"view_silver_{entity}_changes")
+    @dlt.expect_all(expectations)
+    def dlt_view():
+        silver_df = (
+            dlt.read_stream(f"bronze_{entity}")
+            .transform(parse)
+            .where(col("_quarantined") == lit(False))
+            .drop("_quarantined")
+        )
+
+        if "_rescued_data" in silver_df.schema.fieldNames():
+            silver_df = silver_df.drop("_rescued_data")
+
+        return silver_df
+
+    dlt.create_streaming_table(
+        name=f"silver_{entity}_changes",
+        comment=", ".join([f"{e}: {tags[e]}" for e in tags.keys()]),
+        table_properties={
+            "quality": "bronze",
+            "pipelines.reset.allowed": "false"
+        },
+        )
+
+    dlt.apply_changes(
+        target=f"silver_{entity}_changes",
+        source=f"view_silver_{entity}_changes",
+        keys=keys,
+        sequence_by=col(sequence_by),
+        stored_as_scd_type="2",
+        ignore_null_updates=ignore_null_updates,
+        apply_as_deletes=apply_as_deletes,
+        apply_as_truncates=apply_as_truncates,
+        column_list=column_list,
+        except_column_list=except_column_list,
+        track_history_column_list=track_history_column_list,
+        track_history_except_column_list=track_history_except_column_list
+        )
+
 class DLTPipeline():
     """ Delta Live Tables Pipeline """
 
@@ -35,7 +363,7 @@ class DLTPipeline():
         source_path = None,
         continuous_workflow = False
         ):
-        
+
         self.spark = spark
         self.dbutils = dbutils
         self.source_system = source_system
@@ -48,12 +376,19 @@ class DLTPipeline():
         self.tags["Source system"] = self.source_system
         self.tags["Entity"] = self.entity
 
-        self.__create_or_update_workflow(
+        _create_or_update_workflow(
+            dbutils=self.dbutils,
+            source_system=self.source_system,
+            entity=self.entity,
             catalog=catalog,
+            continuous_workflow=self.continuous_workflow,
             databricks_token=databricks_token,
             databricks_host=databricks_host,
-            source_path=source_path
+            source_path=source_path,
+            tags=self.tags
             )
+
+
     def silver_to_gold(
         self,
         name,
@@ -80,154 +415,6 @@ class DLTPipeline():
                 .transform(parse)
             )
 
-    def __create_or_update_workflow(
-        self,
-        catalog,
-        databricks_token,
-        databricks_host = None,
-        source_path = None
-        ):
-        """ Create Delta Live Tables Workflow """
-
-        try:
-            if not databricks_host:
-                databricks_host = (
-                    self.dbutils
-                    .notebook.entry_point.getDbutils()
-                    .notebook().getContext()
-                    .tags().get("browserHostName").get()
-                )
-
-            if not source_path:
-                source_path = (
-                    self.dbutils.notebook.entry_point.getDbutils()
-                    .notebook().getContext()
-                    .notebookPath().get()
-                )
-        except:
-            # Cannot get information from notebook context, give up
-            return
-
-        workflow_settings = self.__get_workflow_settings(
-            catalog=catalog,
-            source_path=source_path,
-            )
-
-        pipeline_id = self.__get_workflow_id(
-            databricks_host=databricks_host,
-            databricks_token=databricks_token
-            )
-
-        if pipeline_id:
-            self.__update_workflow(
-                pipeline_id,
-                workflow_settings,
-                databricks_host,
-                databricks_token
-                )
-        else:
-            self.__create_workflow(
-                workflow_settings,
-                databricks_host,
-                databricks_token
-                )
-            
-    def __get_workflow_settings(
-        self,
-        catalog,
-        source_path,
-        ):
-        settings = {
-            "name": f"{self.source_system}-{self.entity}",
-            "edition": "Advanced",
-            "development": True,
-            "clusters": [
-                {
-                "label": "default",
-                "autoscale": {
-                    "min_workers": 1,
-                    "max_workers": 2,
-                    "mode": "ENHANCED"
-                }
-                }
-            ],
-            "channel": "PREVIEW",
-            "libraries": [
-                {
-                "notebook": {
-                    "path": source_path
-                }
-                }
-            ],
-            "catalog": catalog,
-            "target": self.source_system,
-            "configuration": {
-                "pipelines.enableTrackHistory": "true"
-            },
-            "continuous": self.continuous_workflow
-        }
-
-        settings["configuration"].update(self.tags)
-
-        return settings
-
-    def __get_workflow_id(
-        self,
-        databricks_host,
-        databricks_token
-        ):
-        name = f"{self.source_system}-{self.entity}"
-        params = urllib.parse.urlencode(
-            {"filter": f"name LIKE '{name}'"},
-            quote_via=urllib.parse.quote)
-
-        response = requests.get(
-            url=f"https://{databricks_host}/api/2.0/pipelines",
-            params=params,
-            headers={"Authorization": f"Bearer {databricks_token}"},
-            timeout=60
-            )
-
-        if response.status_code == 200:
-            payload = response.json()
-            if "statuses" in payload.keys():
-                if len(payload["statuses"]) == 1:
-                    return payload["statuses"][0]["pipeline_id"]
-
-        return None
-
-    def __update_workflow(
-        self,
-        pipeline_id,
-        workflow_settings,
-        databricks_host,
-        databricks_token
-        ):
-
-        response = requests.put(
-            url=f"https://{databricks_host}/api/2.0/pipelines/{pipeline_id}",
-            json=workflow_settings,
-            headers={"Authorization": f"Bearer {databricks_token}"},
-            timeout=60
-            )
-
-        response.raise_for_status()
-
-    def __create_workflow(
-        self,
-        workflow_settings,
-        databricks_host,
-        databricks_token
-        ):
-
-        response = requests.post(
-            url=f"https://{databricks_host}/api/2.0/pipelines",
-            json=workflow_settings,
-            headers={"Authorization": f"Bearer {databricks_token}"},
-            timeout=60
-            )
-
-        response.raise_for_status()
 
 
 class DLTFilePipeline(DLTPipeline):
@@ -281,7 +468,7 @@ class DLTFilePipeline(DLTPipeline):
 
     def bronze_to_silver(
         self,
-        keys,
+        keys = None,
         sequence_by = "_ingest_time",
         ignore_null_updates = False,
         apply_as_deletes = None,
@@ -293,43 +480,26 @@ class DLTFilePipeline(DLTPipeline):
         ):
         """ Bronze to Silver, upsert """
 
-        if not expectations:
-            expectations = {}
-
-        @dlt.view(name=f"view_silver_{self.entity}")
-        @dlt.expect_all(expectations)
-        def dlt_view():
-            silver_df = (
-                dlt.read_stream(f"bronze_{self.entity}")
-                .transform(parse)
-                .where(col("_quarantined") == lit(False))
-                .drop("_quarantined")
+        if keys and len(keys) > 0:
+            _bronze_to_silver_upsert(
+                entity=self.entity,
+                keys=keys,
+                sequence_by=sequence_by,
+                tags=self.tags,
+                ignore_null_updates=ignore_null_updates,
+                apply_as_deletes=apply_as_deletes,
+                apply_as_truncates=apply_as_truncates,
+                column_list=column_list,
+                except_column_list=except_column_list,
+                parse=parse,
+                expectations=expectations
             )
-
-            if "_rescued_data" in silver_df.schema.fieldNames():
-                silver_df = silver_df.drop("_rescued_data")
-
-            return silver_df
-
-        dlt.create_streaming_table(
-            name=f"silver_{self.entity}",
-            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
-            table_properties={
-                "quality": "bronze",
-                "pipelines.reset.allowed": "false"
-            },
-            )
-
-        dlt.apply_changes(
-            target=f"silver_{self.entity}",
-            source=f"view_silver_{self.entity}",
-            keys=keys,
-            sequence_by=col(sequence_by),
-            ignore_null_updates=ignore_null_updates,
-            apply_as_deletes=apply_as_deletes,
-            apply_as_truncates=apply_as_truncates,
-            column_list=column_list,
-            except_column_list=except_column_list,
+        else:
+            _bronze_to_silver_append(
+                entity=self.entity,
+                tags=self.tags,
+                parse=parse,
+                expectations=expectations
             )
 
     def bronze_to_silver_track_changes(
@@ -348,50 +518,21 @@ class DLTFilePipeline(DLTPipeline):
         ):
         """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
 
-        if not expectations:
-            expectations = {}
-
-        if not track_history_except_column_list:
-            track_history_except_column_list = [sequence_by]
-
-        @dlt.view(name=f"view_silver_{self.entity}_changes")
-        @dlt.expect_all(expectations)
-        def dlt_view():
-            silver_df = (
-                dlt.read_stream(f"bronze_{self.entity}")
-                .transform(parse)
-                .where(col("_quarantined") == lit(False))
-                .drop("_quarantined")
-            )
-
-            if "_rescued_data" in silver_df.schema.fieldNames():
-                silver_df = silver_df.drop("_rescued_data")
-
-            return silver_df
-
-        dlt.create_streaming_table(
-            name=f"silver_{self.entity}_changes",
-            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
-            table_properties={
-                "quality": "bronze",
-                "pipelines.reset.allowed": "false"
-            },
-            )
-
-        dlt.apply_changes(
-            target=f"silver_{self.entity}_changes",
-            source=f"view_silver_{self.entity}_changes",
+        _bronze_to_silver_track_changes(
+            entity=self.entity,
             keys=keys,
-            sequence_by=col(sequence_by),
-            stored_as_scd_type="2",
+            sequence_by=sequence_by,
+            tags=self.tags,
             ignore_null_updates=ignore_null_updates,
             apply_as_deletes=apply_as_deletes,
             apply_as_truncates=apply_as_truncates,
             column_list=column_list,
             except_column_list=except_column_list,
             track_history_column_list=track_history_column_list,
-            track_history_except_column_list=track_history_except_column_list
-            )
+            track_history_except_column_list=track_history_except_column_list,
+            parse=parse,
+            expectations=expectations 
+        )
 
 
 class DLTEventPipeline(DLTPipeline):
@@ -480,7 +621,7 @@ class DLTEventPipeline(DLTPipeline):
 
             if quarantine_rules:
                 result_df = result_df.withColumn("_quarantined", expr(quarantine_rules))
-            
+
             return result_df
 
 
@@ -491,28 +632,9 @@ class DLTEventPipeline(DLTPipeline):
         ):
         """ Bronze to Silver, append-only """
 
-        if not expectations:
-            expectations = {}
-
-        @dlt.table(
-            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
-            name=f"silver_{self.entity}",
-            table_properties={
-                "quality": "silver",
-                "pipelines.reset.allowed": "false"
-            },
+        _bronze_to_silver_append(
+            entity=self.entity,
+            tags=self.tags,
+            parse=parse,
+            expectations=expectations
         )
-        @dlt.expect_all(expectations)
-        def dlt_table():
-
-            silver_df = ( 
-                dlt.read(f"bronze_{self.entity}")
-                .transform(parse)
-                .where(col("_quarantined") == lit(False))
-                .drop("_quarantined")
-            )
-
-            if "_rescued_data" in silver_df.schema.fieldNames():
-                silver_df = silver_df.drop("_rescued_data")
-
-            return silver_df
