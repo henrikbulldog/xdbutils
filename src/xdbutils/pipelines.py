@@ -459,7 +459,6 @@ class DLTFilePipeline(DLTPipeline):
                 .load(f"{raw_base_path}/{self.source_system}/{self.entity}")
                 .withColumn("_ingest_time", current_timestamp())
                 .withColumn("_quarantined", lit(False))
-                .withColumn("_source_filename", regexp_extract(input_file_name(), '[^\/]*$', 0))
             )
 
             if quarantine_rules:
