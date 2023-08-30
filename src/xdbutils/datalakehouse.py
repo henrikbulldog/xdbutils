@@ -229,8 +229,11 @@ class Job():
         # We don't want to update matched row unless any of the values (i.e. column that
         # is not part of the primary key nor a metadata column) has not changed.
         value_columns = [col for col in dataframe.columns if col not in self._target_keys]
-        update_condition = " OR ".join(
-            [f"NOT (source.{c} <=> target.{c})" for c in value_columns])
+        if len(value_columns) == 0:
+            update_condition = None
+        else:
+            update_condition = " OR ".join(
+                [f"NOT (source.{c} <=> target.{c})" for c in value_columns])
         table = DeltaTable.forPath(self._spark, target_path)
         (
             table.alias("target")
