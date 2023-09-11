@@ -77,6 +77,37 @@ class XDBUtils():
             source_path=source_path
             )
 
+    def expose_dlt_tables(self, from_catalog, silver_catalog, gold_catalog):
+        """ Expose DLT silver and gold tables from DLT catalog to other catalogs. """
+
+        schemas = [r[0] for r in (
+                   self.spark.sql(f"show schemas in {from_catalog}")
+                   .select("databaseName"))
+                   .collect()]
+        for schema in schemas:
+            tables = [r[0] for r in (
+                self.spark.sql(f"show tables in {from_catalog}.{schema}")
+                .select("tableName")
+                ).collect()]
+            for table in tables:
+                parts = table.split("_")
+                if len(parts) > 1:
+                    if parts[0] == "silver":
+                        self.spark.sql(f"create schema if not exists {silver_catalog}.{schema}")
+                        self.spark.sql(f"""
+                        create view if not exists {silver_catalog}.{schema}.{table.replace("silver_", "")}
+                        as
+                        select *
+                        from {from_catalog}.{schema}.{table}
+                        """)
+                    if parts[0] == "gold":
+                        self.spark.sql(f"create schema if not exists {gold_catalog}.{schema}")
+                        self.spark.sql(f"""
+                        create view if not exists {silver_catalog}.{schema}.{table.replace("gold_", "")}
+                        as
+                        select *
+                        from {from_catalog}.{schema}.{table}
+                        """)
 
 class Transforms():
     """ Transforms """
