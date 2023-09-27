@@ -439,6 +439,7 @@ class DLTFilePipeline(DLTPipeline):
         self,
         raw_base_path,
         raw_format,
+        entity = None,
         options = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         partition_cols = None,
@@ -446,12 +447,12 @@ class DLTFilePipeline(DLTPipeline):
         ):
         """ Raw to bronze """
 
+        if not entity:
+            entity = self.entity
         if not options:
             options = {}
-
         if not partition_cols:
             partition_cols = []
-
         if not expectations:
             expectations = {}
             quarantine_rules = None
@@ -490,6 +491,7 @@ class DLTFilePipeline(DLTPipeline):
 
     def bronze_to_silver(
         self,
+        entity = None,
         keys = None,
         sequence_by = None,
         ignore_null_updates = False,
@@ -503,13 +505,16 @@ class DLTFilePipeline(DLTPipeline):
         ):
         """ Bronze to Silver, append (if no keys) or upsert (if keys and sequence_by is specified) """
 
+        if not entity:
+            entity = self.entity
+
         if keys and len(keys) > 0:
 
             if not sequence_by:
                 raise Exception("sequence_by must be specified for upserts")
 
             _bronze_to_silver_upsert(
-                entity=self.entity,
+                entity=entity,
                 keys=keys,
                 sequence_by=sequence_by,
                 ignore_null_updates=ignore_null_updates,
@@ -525,7 +530,7 @@ class DLTFilePipeline(DLTPipeline):
 
         else:
             _bronze_to_silver_append(
-                entity=self.entity,
+                entity=entity,
                 parse=parse,
                 partition_cols=partition_cols,
                 expectations=expectations,
@@ -536,6 +541,7 @@ class DLTFilePipeline(DLTPipeline):
         self,
         keys,
         sequence_by,
+        entity = None,
         ignore_null_updates = False,
         apply_as_deletes = None,
         apply_as_truncates = None,
@@ -549,8 +555,11 @@ class DLTFilePipeline(DLTPipeline):
         ):
         """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
 
+        if not entity:
+            entity = self.entity
+
         _bronze_to_silver_track_changes(
-            entity=self.entity,
+            entity=entity,
             keys=keys,
             sequence_by=sequence_by,
             tags=self.tags,
@@ -603,14 +612,16 @@ class DLTEventPipeline(DLTPipeline):
         eventhub_name,
         eventhub_connection_string,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+        entity = None,
         partition_cols = None,
         expectations = None,
     ):
         """ Event to bronze """
 
+        if not entity:
+            entity = self.entity
         if not partition_cols:
             partition_cols = []
-
         if not expectations:
             expectations = {}
             quarantine_rules = None
@@ -660,12 +671,16 @@ class DLTEventPipeline(DLTPipeline):
     def bronze_to_silver(
         self,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+        entity = None,
         expectations = None
         ):
         """ Bronze to Silver, append-only """
 
+        if not entity:
+            entity = self.entity
+
         _bronze_to_silver_append(
-            entity=self.entity,
+            entity=entity,
             parse=parse,
             expectations=expectations,
             tags=self.tags,
