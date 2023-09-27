@@ -425,6 +425,7 @@ class DLTFilePipeline(DLTPipeline):
         raw_base_path,
         raw_format,
         options = None,
+        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         partition_cols = None,
         expectations = None,
         ):
@@ -462,6 +463,7 @@ class DLTFilePipeline(DLTPipeline):
                     f"{raw_base_path}/checkpoints/{self.source_system}/{self.entity}"
                     )
                 .load(f"{raw_base_path}/{self.source_system}/{self.entity}")
+                .transform(parse)
                 .withColumn("_ingest_time", current_timestamp())
                 .withColumn("_quarantined", lit(False))
             )
