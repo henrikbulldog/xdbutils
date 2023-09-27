@@ -190,7 +190,7 @@ def _create_workflow(
 
 def _bronze_to_silver_append(
     entity,
-    read: Callable[[DataFrame]] = None, 
+    read = None,
     parse: Callable[[DataFrame], DataFrame] = lambda df: df,
     partition_cols = None,
     expectations = None,
@@ -240,7 +240,7 @@ def _bronze_to_silver_upsert(
     apply_as_truncates = None,
     column_list = None,
     except_column_list = None,
-    read: Callable[[DataFrame]] = None, 
+    read = None, 
     parse: Callable[[DataFrame], DataFrame] = lambda df: df,
     partition_cols = None,
     expectations = None,
@@ -305,7 +305,7 @@ def _bronze_to_silver_track_changes(
     except_column_list = None,
     track_history_column_list = None,
     track_history_except_column_list = None,
-    read: Callable[[DataFrame]] = None, 
+    read = None, 
     parse: Callable[[DataFrame], DataFrame] = lambda df: df,
     partition_cols = None,
     expectations = None,
@@ -411,7 +411,7 @@ class DLTPipeline():
         self,
         name,
         entity = None,
-        read: Callable[[DataFrame]] = None, 
+        read = None, 
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
@@ -506,7 +506,7 @@ class DLTFilePipeline(DLTPipeline):
         apply_as_truncates = None,
         column_list = None,
         except_column_list = None,
-        read: Callable[[DataFrame]] = None, 
+        read = None, 
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         partition_cols = None,
         expectations = None
@@ -559,7 +559,7 @@ class DLTFilePipeline(DLTPipeline):
         except_column_list = None,
         track_history_column_list = None,
         track_history_except_column_list = None,
-        read: Callable[[DataFrame]] = None, 
+        read = None, 
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         partition_cols = None,
         expectations = None,
@@ -683,7 +683,7 @@ class DLTEventPipeline(DLTPipeline):
     def bronze_to_silver(
         self,
         entity = None,
-        read: Callable[[DataFrame]] = None, 
+        read = None, 
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
