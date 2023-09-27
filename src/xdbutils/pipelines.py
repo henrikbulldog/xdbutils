@@ -189,8 +189,8 @@ def _create_workflow(
     response.raise_for_status()
 
 def _bronze_to_silver_append(
-    entity,
-    read = None,
+    source_entity,
+    target_entity,
     parse: Callable[[DataFrame], DataFrame] = lambda df: df,
     partition_cols = None,
     expectations = None,
@@ -209,7 +209,7 @@ def _bronze_to_silver_append(
 
     @dlt.table(
         comment=", ".join([f"{e}: {tags[e]}" for e in tags.keys()]),
-        name=f"silver_{entity}",
+        name=f"silver_{target_entity}",
         table_properties={
             "quality": "silver",
             "pipelines.reset.allowed": "false"
@@ -220,7 +220,7 @@ def _bronze_to_silver_append(
     def dlt_table():
 
         silver_df = (
-            (read if read else dlt.read(f"bronze_{entity}"))
+            dlt.read(f"bronze_{source_entity}")
             .transform(parse)
             .where(col("_quarantined") == lit(False))
             .drop("_quarantined")
@@ -232,7 +232,8 @@ def _bronze_to_silver_append(
         return silver_df
 
 def _bronze_to_silver_upsert(
-    entity,
+    source_entity,
+    target_entity,
     keys,
     sequence_by,
     ignore_null_updates = False,
@@ -240,7 +241,6 @@ def _bronze_to_silver_upsert(
     apply_as_truncates = None,
     column_list = None,
     except_column_list = None,
-    read = None, 
     parse: Callable[[DataFrame], DataFrame] = lambda df: df,
     partition_cols = None,
     expectations = None,
@@ -257,11 +257,11 @@ def _bronze_to_silver_upsert(
     if not expectations:
         expectations = {}
 
-    @dlt.view(name=f"view_silver_{entity}")
+    @dlt.view(name=f"view_silver_{target_entity}")
     @dlt.expect_all(expectations)
     def dlt_view():
         silver_df = (
-            (read if read else dlt.read_stream(f"bronze_{entity}"))
+            dlt.read_stream(f"bronze_{source_entity}")
             .transform(parse)
             .where(col("_quarantined") == lit(False))
             .drop("_quarantined")
@@ -273,7 +273,7 @@ def _bronze_to_silver_upsert(
         return silver_df
 
     dlt.create_streaming_table(
-        name=f"silver_{entity}",
+        name=f"silver_{target_entity}",
         comment=", ".join([f"{e}: {tags[e]}" for e in tags.keys()]),
         table_properties={
             "quality": "bronze",
@@ -283,8 +283,8 @@ def _bronze_to_silver_upsert(
         )
 
     dlt.apply_changes(
-        target=f"silver_{entity}",
-        source=f"view_silver_{entity}",
+        target=f"silver_{target_entity}",
+        source=f"view_silver_{target_entity}",
         keys=keys,
         sequence_by=col(sequence_by),
         ignore_null_updates=ignore_null_updates,
@@ -295,7 +295,8 @@ def _bronze_to_silver_upsert(
         )
 
 def _bronze_to_silver_track_changes(
-    entity,
+    source_entity,
+    target_entity,
     keys,
     sequence_by,
     ignore_null_updates = False,
@@ -305,7 +306,6 @@ def _bronze_to_silver_track_changes(
     except_column_list = None,
     track_history_column_list = None,
     track_history_except_column_list = None,
-    read = None, 
     parse: Callable[[DataFrame], DataFrame] = lambda df: df,
     partition_cols = None,
     expectations = None,
@@ -325,11 +325,11 @@ def _bronze_to_silver_track_changes(
     if not track_history_except_column_list:
         track_history_except_column_list = [sequence_by]
 
-    @dlt.view(name=f"view_silver_{entity}_changes")
+    @dlt.view(name=f"view_silver_{target_entity}_changes")
     @dlt.expect_all(expectations)
     def dlt_view():
         silver_df = (
-            (read if read else dlt.read_stream(f"bronze_{entity}"))
+            dlt.read_stream(f"bronze_{source_entity}")
             .transform(parse)
             .where(col("_quarantined") == lit(False))
             .drop("_quarantined")
@@ -341,7 +341,7 @@ def _bronze_to_silver_track_changes(
         return silver_df
 
     dlt.create_streaming_table(
-        name=f"silver_{entity}_changes",
+        name=f"silver_{target_entity}_changes",
         comment=", ".join([f"{e}: {tags[e]}" for e in tags.keys()]),
         table_properties={
             "quality": "bronze",
@@ -351,8 +351,8 @@ def _bronze_to_silver_track_changes(
         )
 
     dlt.apply_changes(
-        target=f"silver_{entity}_changes",
-        source=f"view_silver_{entity}_changes",
+        target=f"silver_{target_entity}_changes",
+        source=f"view_silver_{target_entity}_changes",
         keys=keys,
         sequence_by=col(sequence_by),
         stored_as_scd_type="2",
@@ -410,21 +410,23 @@ class DLTPipeline():
     def silver_to_gold(
         self,
         name,
-        entity = None,
-        read = None, 
+        source_entity = None,
+        target_entity = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
         """ Bronze to Silver """
 
-        if not entity:
-            entity = self.entity
+        if not source_entity:
+            source_entity = self.entity
+        if not target_entity:
+            target_entity = self.entity
         if not expectations:
             expectations = {}
 
         @dlt.table(
             comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
-            name=f"gold_{entity}_{name}",
+            name=f"gold_{target_entity}_{name}",
             table_properties={
                 "quality": "gold",
                 "pipelines.reset.allowed": "false"
@@ -433,7 +435,7 @@ class DLTPipeline():
         @dlt.expect_all(expectations)
         def dlt_table():
             return (
-                (read if read else dlt.read(f"silver_{entity}"))
+                dlt.read(f"silver_{source_entity}")
                 .transform(parse)
             )
 
@@ -446,7 +448,8 @@ class DLTFilePipeline(DLTPipeline):
         self,
         raw_base_path,
         raw_format,
-        entity = None,
+        source_entity = None,
+        target_entity = None,
         options = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         partition_cols = None,
@@ -454,8 +457,10 @@ class DLTFilePipeline(DLTPipeline):
         ):
         """ Raw to bronze """
 
-        if not entity:
-            entity = self.entity
+        if not source_entity:
+            source_entity = self.entity
+        if not target_entity:
+            target_entity = self.entity
         if not options:
             options = {}
         if not partition_cols:
@@ -468,7 +473,7 @@ class DLTFilePipeline(DLTPipeline):
 
         @dlt.table(
             comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
-            name=f"bronze_{entity}",
+            name=f"bronze_{target_entity}",
             table_properties={
                 "quality": "bronze",
                 "pipelines.reset.allowed": "false"
@@ -483,9 +488,9 @@ class DLTFilePipeline(DLTPipeline):
                 .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
                 .option(
                     "cloudFiles.schemaLocation",
-                    f"{raw_base_path}/checkpoints/{self.source_system}/{entity}"
+                    f"{raw_base_path}/checkpoints/{self.source_system}/{source_entity}"
                     )
-                .load(f"{raw_base_path}/{self.source_system}/{entity}")
+                .load(f"{raw_base_path}/{self.source_system}/{source_entity}")
                 .transform(parse)
                 .withColumn("_ingest_time", current_timestamp())
                 .withColumn("_quarantined", lit(False))
@@ -498,7 +503,8 @@ class DLTFilePipeline(DLTPipeline):
 
     def bronze_to_silver(
         self,
-        entity = None,
+        source_entity = None,
+        target_entity = None,
         keys = None,
         sequence_by = None,
         ignore_null_updates = False,
@@ -506,15 +512,16 @@ class DLTFilePipeline(DLTPipeline):
         apply_as_truncates = None,
         column_list = None,
         except_column_list = None,
-        read = None, 
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         partition_cols = None,
-        expectations = None
+        expectations = None,
         ):
         """ Bronze to Silver, append (if no keys) or upsert (if keys and sequence_by is specified) """
 
-        if not entity:
-            entity = self.entity
+        if not source_entity:
+            source_entity = self.entity
+        if not target_entity:
+            target_entity = self.entity
 
         if keys and len(keys) > 0:
 
@@ -522,7 +529,8 @@ class DLTFilePipeline(DLTPipeline):
                 raise Exception("sequence_by must be specified for upserts")
 
             _bronze_to_silver_upsert(
-                entity=entity,
+                source_entity=source_entity,
+                target_entity=target_entity,
                 keys=keys,
                 sequence_by=sequence_by,
                 ignore_null_updates=ignore_null_updates,
@@ -530,7 +538,6 @@ class DLTFilePipeline(DLTPipeline):
                 apply_as_truncates=apply_as_truncates,
                 column_list=column_list,
                 except_column_list=except_column_list,
-                read=read,
                 parse=parse,
                 partition_cols=partition_cols,
                 expectations=expectations,
@@ -539,8 +546,8 @@ class DLTFilePipeline(DLTPipeline):
 
         else:
             _bronze_to_silver_append(
-                entity=entity,
-                read=read,
+                source_entity=source_entity,
+                target_entity=target_entity,
                 parse=parse,
                 partition_cols=partition_cols,
                 expectations=expectations,
@@ -551,7 +558,8 @@ class DLTFilePipeline(DLTPipeline):
         self,
         keys,
         sequence_by,
-        entity = None,
+        source_entity = None,
+        target_entity = None,
         ignore_null_updates = False,
         apply_as_deletes = None,
         apply_as_truncates = None,
@@ -559,18 +567,20 @@ class DLTFilePipeline(DLTPipeline):
         except_column_list = None,
         track_history_column_list = None,
         track_history_except_column_list = None,
-        read = None, 
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         partition_cols = None,
         expectations = None,
         ):
         """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
 
-        if not entity:
-            entity = self.entity
+        if not source_entity:
+            source_entity = self.entity
+        if not target_entity:
+            target_entity = self.entity
 
         _bronze_to_silver_track_changes(
-            entity=entity,
+            source_entity = None,
+            target_entity = None,
             keys=keys,
             sequence_by=sequence_by,
             tags=self.tags,
@@ -581,7 +591,6 @@ class DLTFilePipeline(DLTPipeline):
             except_column_list=except_column_list,
             track_history_column_list=track_history_column_list,
             track_history_except_column_list=track_history_except_column_list,
-            read=read,
             parse=parse,
             partition_cols=partition_cols,
             expectations=expectations,
@@ -623,15 +632,15 @@ class DLTEventPipeline(DLTPipeline):
         eventhub_group_id,
         eventhub_name,
         eventhub_connection_string,
-        entity = None,
+        target_entity = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         partition_cols = None,
         expectations = None,
     ):
         """ Event to bronze """
 
-        if not entity:
-            entity = self.entity
+        if not target_entity:
+            target_entity = self.entity
         if not partition_cols:
             partition_cols = []
         if not expectations:
@@ -656,7 +665,7 @@ class DLTEventPipeline(DLTPipeline):
 
         @dlt.create_table(
             comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
-            name=f"bronze_{entity}",
+            name=f"bronze_{target_entity}",
             table_properties={
                 "quality": "bronze",
                 "pipelines.reset.allowed": "false"
@@ -682,19 +691,21 @@ class DLTEventPipeline(DLTPipeline):
 
     def bronze_to_silver(
         self,
-        entity = None,
-        read = None, 
+        source_entity = None,
+        target_entity = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
         """ Bronze to Silver, append-only """
 
-        if not entity:
-            entity = self.entity
+        if not source_entity:
+            source_entity = self.entity
+        if not target_entity:
+            target_entity = self.entity
 
         _bronze_to_silver_append(
-            entity=entity,
-            read=read,
+            source_entity=source_entity,
+            target_entity=target_entity,
             parse=parse,
             expectations=expectations,
             tags=self.tags,
