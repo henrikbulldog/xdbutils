@@ -191,10 +191,14 @@ def _create_workflow(
 def _bronze_to_silver_append(
     entity,
     parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+    partition_cols = None,
     expectations = None,
     tags = None,
     ):
     """ Bronze to Silver, append-only """
+
+    if not partition_cols:
+        partition_cols = []
 
     if not tags:
         tags = {}
@@ -209,6 +213,7 @@ def _bronze_to_silver_append(
             "quality": "silver",
             "pipelines.reset.allowed": "false"
         },
+        partition_cols=partition_cols,
     )
     @dlt.expect_all(expectations)
     def dlt_table():
@@ -235,10 +240,14 @@ def _bronze_to_silver_upsert(
     column_list = None,
     except_column_list = None,
     parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+    partition_cols = None,
     expectations = None,
     tags = None,
     ):
     """ Bronze to Silver, upsert """
+
+    if not partition_cols:
+        partition_cols = []
 
     if not tags:
         tags = {}
@@ -268,6 +277,7 @@ def _bronze_to_silver_upsert(
             "quality": "bronze",
             "pipelines.reset.allowed": "false"
         },
+        partition_cols=partition_cols,
         )
 
     dlt.apply_changes(
@@ -294,10 +304,14 @@ def _bronze_to_silver_track_changes(
     track_history_column_list = None,
     track_history_except_column_list = None,
     parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+    partition_cols = None,
     expectations = None,
     tags = None,
     ):
     """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
+
+    if not partition_cols:
+        partition_cols = []
 
     if not tags:
         tags = {}
@@ -330,6 +344,7 @@ def _bronze_to_silver_track_changes(
             "quality": "bronze",
             "pipelines.reset.allowed": "false"
         },
+        partition_cols=partition_cols,
         )
 
     dlt.apply_changes(
@@ -483,6 +498,7 @@ class DLTFilePipeline(DLTPipeline):
         column_list = None,
         except_column_list = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+        partition_cols = None,
         expectations = None
         ):
         """ Bronze to Silver, append (if no keys) or upsert (if keys and sequence_by is specified) """
@@ -502,6 +518,7 @@ class DLTFilePipeline(DLTPipeline):
                 column_list=column_list,
                 except_column_list=except_column_list,
                 parse=parse,
+                partition_cols=partition_cols,
                 expectations=expectations,
                 tags=self.tags,
             )
@@ -510,6 +527,7 @@ class DLTFilePipeline(DLTPipeline):
             _bronze_to_silver_append(
                 entity=self.entity,
                 parse=parse,
+                partition_cols=partition_cols,
                 expectations=expectations,
                 tags=self.tags,
             )
@@ -526,7 +544,8 @@ class DLTFilePipeline(DLTPipeline):
         track_history_column_list = None,
         track_history_except_column_list = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-        expectations = None
+        partition_cols = None,
+        expectations = None,
         ):
         """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
 
@@ -543,6 +562,7 @@ class DLTFilePipeline(DLTPipeline):
             track_history_column_list=track_history_column_list,
             track_history_except_column_list=track_history_except_column_list,
             parse=parse,
+            partition_cols=partition_cols,
             expectations=expectations,
         )
 
