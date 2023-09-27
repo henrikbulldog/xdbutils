@@ -4,7 +4,7 @@ from typing import Callable
 import urllib
 import requests
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, current_timestamp, expr, lit, regexp_extract, input_file_name
+from pyspark.sql.functions import col, current_timestamp, expr, lit
 try:
     import dlt  # pylint: disable=import-error
 except ImportError:
@@ -84,7 +84,7 @@ def _create_or_update_workflow(
         # Cannot get information from notebook context, give up
         return
 
-        
+
 def _get_workflow_settings(
     source_system,
     entity,
@@ -213,7 +213,7 @@ def _bronze_to_silver_append(
     @dlt.expect_all(expectations)
     def dlt_table():
 
-        silver_df = ( 
+        silver_df = (
             dlt.read(f"bronze_{entity}")
             .transform(parse)
             .where(col("_quarantined") == lit(False))
@@ -425,12 +425,16 @@ class DLTFilePipeline(DLTPipeline):
         raw_base_path,
         raw_format,
         options = None,
+        partition_cols = None,
         expectations = None,
         ):
         """ Raw to bronze """
 
         if not options:
             options = {}
+
+        if not partition_cols:
+            partition_cols = []
 
         if not expectations:
             expectations = {}
@@ -445,6 +449,7 @@ class DLTFilePipeline(DLTPipeline):
                 "quality": "bronze",
                 "pipelines.reset.allowed": "false"
             },
+            partition_cols=partition_cols,
         )
         def dlt_table():
             result_df = ( self.spark.readStream.format("cloudFiles")
@@ -536,7 +541,7 @@ class DLTFilePipeline(DLTPipeline):
             track_history_column_list=track_history_column_list,
             track_history_except_column_list=track_history_except_column_list,
             parse=parse,
-            expectations=expectations 
+            expectations=expectations,
         )
 
 
@@ -611,8 +616,8 @@ class DLTEventPipeline(DLTPipeline):
                 "quality": "bronze",
                 "pipelines.reset.allowed": "false"
             },
-            partition_cols=partition_cols        )
-        @dlt.expect_all(expectations)
+            partition_cols=partition_cols,
+        )
         def dlt_table():
             result_df = (
                 self.spark.readStream
