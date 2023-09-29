@@ -632,6 +632,7 @@ class DLTEventPipeline(DLTPipeline):
         eventhub_group_id,
         eventhub_name,
         eventhub_connection_string,
+        startingOffsets = None,
         target_entity = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         partition_cols = None,
@@ -639,6 +640,8 @@ class DLTEventPipeline(DLTPipeline):
     ):
         """ Event to bronze """
 
+        if not startingOffsets:
+            startingOffsets = "latest"
         if not target_entity:
             target_entity = self.entity
         if not partition_cols:
@@ -660,7 +663,7 @@ class DLTEventPipeline(DLTPipeline):
             "kafka.session.timeout.ms" : "6000",
             "maxOffsetsPerTrigger"     : "600",
             "failOnDataLoss"           : 'true',
-            "startingOffsets"          : "latest"
+            "startingOffsets"          : "latest",
         }
 
         @dlt.create_table(
