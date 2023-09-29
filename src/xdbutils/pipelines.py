@@ -1,5 +1,6 @@
 """ Delta Live Tables Pipelines """
 
+from functools import reduce
 from typing import Callable
 import urllib
 import requests
@@ -188,8 +189,13 @@ def _create_workflow(
 
     response.raise_for_status()
 
+def _union_streams(sources):
+    source_tables = [dlt.read_stream(t) for t in sources]
+    unioned = reduce(lambda x,y: x.union(y), source_tables)
+    return unioned        
+
 def _bronze_to_silver_append(
-    source_entity,
+    source_entities,
     target_entity,
     parse: Callable[[DataFrame], DataFrame] = lambda df: df,
     partition_cols = None,
@@ -220,7 +226,7 @@ def _bronze_to_silver_append(
     def dlt_table():
 
         silver_df = (
-            dlt.read(f"bronze_{source_entity}")
+            _union_streams([f"bronze_{t}" for t in source_entities])
             .transform(parse)
             .where(col("_quarantined") == lit(False))
             .drop("_quarantined")
@@ -232,7 +238,7 @@ def _bronze_to_silver_append(
         return silver_df
 
 def _bronze_to_silver_upsert(
-    source_entity,
+    source_entities,
     target_entity,
     keys,
     sequence_by,
@@ -261,7 +267,7 @@ def _bronze_to_silver_upsert(
     @dlt.expect_all(expectations)
     def dlt_view():
         silver_df = (
-            dlt.read_stream(f"bronze_{source_entity}")
+            _union_streams([f"bronze_{t}" for t in source_entities])
             .transform(parse)
             .where(col("_quarantined") == lit(False))
             .drop("_quarantined")
@@ -295,7 +301,7 @@ def _bronze_to_silver_upsert(
         )
 
 def _bronze_to_silver_track_changes(
-    source_entity,
+    source_entities,
     target_entity,
     keys,
     sequence_by,
@@ -329,7 +335,7 @@ def _bronze_to_silver_track_changes(
     @dlt.expect_all(expectations)
     def dlt_view():
         silver_df = (
-            dlt.read_stream(f"bronze_{source_entity}")
+            _union_streams([f"bronze_{t}" for t in source_entities])
             .transform(parse)
             .where(col("_quarantined") == lit(False))
             .drop("_quarantined")
@@ -410,15 +416,15 @@ class DLTPipeline():
     def silver_to_gold(
         self,
         name,
-        source_entity = None,
+        source_entities = None,
         target_entity = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
         """ Bronze to Silver """
 
-        if not source_entity:
-            source_entity = self.entity
+        if not source_entities:
+            source_entities = [self.entity]
         if not target_entity:
             target_entity = self.entity
         if not expectations:
@@ -435,10 +441,9 @@ class DLTPipeline():
         @dlt.expect_all(expectations)
         def dlt_table():
             return (
-                dlt.read(f"silver_{source_entity}")
+                _union_streams([f"silver_{t}" for t in source_entities])
                 .transform(parse)
             )
-
 
 
 class DLTFilePipeline(DLTPipeline):
@@ -503,7 +508,7 @@ class DLTFilePipeline(DLTPipeline):
 
     def bronze_to_silver(
         self,
-        source_entity = None,
+        source_entities = None,
         target_entity = None,
         keys = None,
         sequence_by = None,
@@ -518,8 +523,8 @@ class DLTFilePipeline(DLTPipeline):
         ):
         """ Bronze to Silver, append (if no keys) or upsert (if keys and sequence_by is specified) """
 
-        if not source_entity:
-            source_entity = self.entity
+        if not source_entities:
+            source_entities = [self.entity]
         if not target_entity:
             target_entity = self.entity
 
@@ -529,7 +534,7 @@ class DLTFilePipeline(DLTPipeline):
                 raise Exception("sequence_by must be specified for upserts")
 
             _bronze_to_silver_upsert(
-                source_entity=source_entity,
+                source_entities=source_entities,
                 target_entity=target_entity,
                 keys=keys,
                 sequence_by=sequence_by,
@@ -546,7 +551,7 @@ class DLTFilePipeline(DLTPipeline):
 
         else:
             _bronze_to_silver_append(
-                source_entity=source_entity,
+                source_entities=source_entities,
                 target_entity=target_entity,
                 parse=parse,
                 partition_cols=partition_cols,
@@ -558,7 +563,7 @@ class DLTFilePipeline(DLTPipeline):
         self,
         keys,
         sequence_by,
-        source_entity = None,
+        source_entities = None,
         target_entity = None,
         ignore_null_updates = False,
         apply_as_deletes = None,
@@ -573,14 +578,14 @@ class DLTFilePipeline(DLTPipeline):
         ):
         """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
 
-        if not source_entity:
-            source_entity = self.entity
+        if not source_entities:
+            source_entities = [self.entity]
         if not target_entity:
             target_entity = self.entity
 
         _bronze_to_silver_track_changes(
-            source_entity = None,
-            target_entity = None,
+            source_entities=source_entities,
+            target_entity=target_entity,
             keys=keys,
             sequence_by=sequence_by,
             tags=self.tags,
@@ -632,7 +637,7 @@ class DLTEventPipeline(DLTPipeline):
         eventhub_group_id,
         eventhub_name,
         eventhub_connection_string,
-        startingOffsets = None,
+        starting_offsets = None,
         target_entity = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         partition_cols = None,
@@ -640,8 +645,8 @@ class DLTEventPipeline(DLTPipeline):
     ):
         """ Event to bronze """
 
-        if not startingOffsets:
-            startingOffsets = "latest"
+        if not starting_offsets:
+            starting_offsets = "latest"
         if not target_entity:
             target_entity = self.entity
         if not partition_cols:
@@ -663,7 +668,7 @@ class DLTEventPipeline(DLTPipeline):
             "kafka.session.timeout.ms" : "6000",
             "maxOffsetsPerTrigger"     : "600",
             "failOnDataLoss"           : 'true',
-            "startingOffsets"          : "latest",
+            "startingOffsets"          : starting_offsets,
         }
 
         @dlt.create_table(
@@ -694,20 +699,20 @@ class DLTEventPipeline(DLTPipeline):
 
     def bronze_to_silver(
         self,
-        source_entity = None,
+        source_entities = None,
         target_entity = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
         """ Bronze to Silver, append-only """
 
-        if not source_entity:
-            source_entity = self.entity
+        if not source_entities:
+            source_entities = [self.entity]
         if not target_entity:
             target_entity = self.entity
 
         _bronze_to_silver_append(
-            source_entity=source_entity,
+            source_entities=source_entities,
             target_entity=target_entity,
             parse=parse,
             expectations=expectations,
