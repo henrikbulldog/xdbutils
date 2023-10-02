@@ -523,6 +523,8 @@ class DLTFilePipeline(DLTPipeline):
         ):
         """ Bronze to Silver, append (if no keys) or upsert (if keys and sequence_by is specified) """
 
+        if not partition_cols:
+            partition_cols = []
         if not source_entities:
             source_entities = [self.entity]
         if not target_entity:
@@ -578,6 +580,8 @@ class DLTFilePipeline(DLTPipeline):
         ):
         """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
 
+        if not partition_cols:
+            partition_cols = []
         if not source_entities:
             source_entities = [self.entity]
         if not target_entity:
@@ -702,6 +706,7 @@ class DLTEventPipeline(DLTPipeline):
         source_entities = None,
         target_entity = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+        partition_cols = None,
         expectations = None
         ):
         """ Bronze to Silver, append-only """
@@ -710,11 +715,14 @@ class DLTEventPipeline(DLTPipeline):
             source_entities = [self.entity]
         if not target_entity:
             target_entity = self.entity
+        if not partition_cols:
+            partition_cols = []
 
         _bronze_to_silver_append(
             source_entities=source_entities,
             target_entity=target_entity,
             parse=parse,
+            partition_cols=partition_cols,
             expectations=expectations,
             tags=self.tags,
         )
