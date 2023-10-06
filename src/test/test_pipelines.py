@@ -3,7 +3,7 @@
 import unittest
 from databricks.connect import DatabricksSession
 from databricks.sdk import WorkspaceClient
-from xdbutils.pipelines import DLTEventPipeline, DLTFilePipeline
+from xdbutils.pipelines import DLTPipeline
 
 spark = DatabricksSession.builder.getOrCreate()
 # Use WorkspaceClient to get dbutils
@@ -16,7 +16,7 @@ class PipelinesTestCase(unittest.TestCase):
     def test_create_file_pipeline(self):
         """ Test create file pipeline """
 
-        pipeline = DLTFilePipeline(
+        pipeline = DLTPipeline(
             spark=spark,
             dbutils=dbutils,
             source_system="testcdc",
@@ -36,10 +36,11 @@ class PipelinesTestCase(unittest.TestCase):
             raw_format="json"
             )
 
-        pipeline.bronze_to_silver(
-        )
+        pipeline.bronze_to_silver()
 
-        pipeline.bronze_to_silver(
+        pipeline.bronze_to_silver_append()
+
+        pipeline.bronze_to_silver_upsert(
             keys=["id"],
             sequence_by="timestamp"
         )
@@ -57,7 +58,7 @@ class PipelinesTestCase(unittest.TestCase):
     def test_create_event_pipeline(self):
         """ Test create event pipeline """
 
-        pipeline = DLTEventPipeline(
+        pipeline = DLTPipeline(
             spark=spark,
             dbutils=dbutils,
             source_system="testcdc",
@@ -68,6 +69,7 @@ class PipelinesTestCase(unittest.TestCase):
                 "cost_center": "123456",
                 "documentation": "https://github.com/henrikbulldog/xdbutils"
             },
+            continuous_workflow=True,
             )
 
         self.assertIsNotNone(pipeline)
@@ -80,6 +82,8 @@ class PipelinesTestCase(unittest.TestCase):
             )
 
         pipeline.bronze_to_silver()
+
+        pipeline.bronze_to_silver_append()
 
         pipeline.silver_to_gold(
             name="test_gold"

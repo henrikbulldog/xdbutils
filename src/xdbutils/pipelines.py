@@ -6,6 +6,9 @@ import urllib
 import requests
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, current_timestamp, expr, lit
+
+from xdbutils.deprecation import deprecated
+
 try:
     import dlt  # pylint: disable=import-error
 except ImportError:
@@ -84,7 +87,6 @@ def _create_or_update_workflow(
     except:
         # Cannot get information from notebook context, give up
         return
-
 
 def _get_workflow_settings(
     source_system,
@@ -192,7 +194,7 @@ def _create_workflow(
 def _union_streams(sources):
     source_tables = [dlt.read_stream(t) for t in sources]
     unioned = reduce(lambda x,y: x.union(y), source_tables)
-    return unioned        
+    return unioned
 
 def _bronze_to_silver_append(
     source_entities,
@@ -412,43 +414,6 @@ class DLTPipeline():
             tags=self.tags
             )
 
-
-    def silver_to_gold(
-        self,
-        name,
-        source_entities = None,
-        target_entity = None,
-        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-        expectations = None
-        ):
-        """ Bronze to Silver """
-
-        if not source_entities:
-            source_entities = [self.entity]
-        if not target_entity:
-            target_entity = self.entity
-        if not expectations:
-            expectations = {}
-
-        @dlt.table(
-            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
-            name=f"gold_{target_entity}_{name}",
-            table_properties={
-                "quality": "gold",
-                "pipelines.reset.allowed": "false"
-            },
-        )
-        @dlt.expect_all(expectations)
-        def dlt_table():
-            return (
-                _union_streams([f"silver_{t}" for t in source_entities])
-                .transform(parse)
-            )
-
-
-class DLTFilePipeline(DLTPipeline):
-    """ Delta Live Tables File Pipeline """
-
     def raw_to_bronze(
         self,
         raw_base_path,
@@ -505,135 +470,6 @@ class DLTFilePipeline(DLTPipeline):
                 result_df = result_df.withColumn("_quarantined", expr(quarantine_rules))
 
             return result_df
-
-    def bronze_to_silver(
-        self,
-        source_entities = None,
-        target_entity = None,
-        keys = None,
-        sequence_by = None,
-        ignore_null_updates = False,
-        apply_as_deletes = None,
-        apply_as_truncates = None,
-        column_list = None,
-        except_column_list = None,
-        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-        partition_cols = None,
-        expectations = None,
-        ):
-        """ Bronze to Silver, append (if no keys) or upsert (if keys and sequence_by is specified) """
-
-        if not partition_cols:
-            partition_cols = []
-        if not source_entities:
-            source_entities = [self.entity]
-        if not target_entity:
-            target_entity = self.entity
-
-        if keys and len(keys) > 0:
-
-            if not sequence_by:
-                raise Exception("sequence_by must be specified for upserts")
-
-            _bronze_to_silver_upsert(
-                source_entities=source_entities,
-                target_entity=target_entity,
-                keys=keys,
-                sequence_by=sequence_by,
-                ignore_null_updates=ignore_null_updates,
-                apply_as_deletes=apply_as_deletes,
-                apply_as_truncates=apply_as_truncates,
-                column_list=column_list,
-                except_column_list=except_column_list,
-                parse=parse,
-                partition_cols=partition_cols,
-                expectations=expectations,
-                tags=self.tags,
-            )
-
-        else:
-            _bronze_to_silver_append(
-                source_entities=source_entities,
-                target_entity=target_entity,
-                parse=parse,
-                partition_cols=partition_cols,
-                expectations=expectations,
-                tags=self.tags,
-            )
-
-    def bronze_to_silver_track_changes(
-        self,
-        keys,
-        sequence_by,
-        source_entities = None,
-        target_entity = None,
-        ignore_null_updates = False,
-        apply_as_deletes = None,
-        apply_as_truncates = None,
-        column_list = None,
-        except_column_list = None,
-        track_history_column_list = None,
-        track_history_except_column_list = None,
-        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-        partition_cols = None,
-        expectations = None,
-        ):
-        """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
-
-        if not partition_cols:
-            partition_cols = []
-        if not source_entities:
-            source_entities = [self.entity]
-        if not target_entity:
-            target_entity = self.entity
-
-        _bronze_to_silver_track_changes(
-            source_entities=source_entities,
-            target_entity=target_entity,
-            keys=keys,
-            sequence_by=sequence_by,
-            tags=self.tags,
-            ignore_null_updates=ignore_null_updates,
-            apply_as_deletes=apply_as_deletes,
-            apply_as_truncates=apply_as_truncates,
-            column_list=column_list,
-            except_column_list=except_column_list,
-            track_history_column_list=track_history_column_list,
-            track_history_except_column_list=track_history_except_column_list,
-            parse=parse,
-            partition_cols=partition_cols,
-            expectations=expectations,
-        )
-
-
-class DLTEventPipeline(DLTPipeline):
-    """ Delta Live Tables Event Pipeline """
-
-    def __init__(
-        self,
-        spark,
-        dbutils,
-        source_system,
-        entity,
-        catalog,
-        tags = None,
-        databricks_token = None,
-        databricks_host = None,
-        source_path = None
-        ):
-
-        super().__init__(
-            spark,
-            dbutils,
-            source_system,
-            entity,
-            catalog,
-            tags,
-            databricks_token,
-            databricks_host,
-            source_path,
-            continuous_workflow = True
-            )
 
     def event_to_bronze(
         self,
@@ -700,23 +536,22 @@ class DLTEventPipeline(DLTPipeline):
 
             return result_df
 
-
-    def bronze_to_silver(
+    def bronze_to_silver_append(
         self,
         source_entities = None,
         target_entity = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         partition_cols = None,
-        expectations = None
+        expectations = None,
         ):
-        """ Bronze to Silver, append-only """
+        """ Bronze to Silver, append only """
 
+        if not partition_cols:
+            partition_cols = []
         if not source_entities:
             source_entities = [self.entity]
         if not target_entity:
             target_entity = self.entity
-        if not partition_cols:
-            partition_cols = []
 
         _bronze_to_silver_append(
             source_entities=source_entities,
@@ -726,3 +561,175 @@ class DLTEventPipeline(DLTPipeline):
             expectations=expectations,
             tags=self.tags,
         )
+
+    def bronze_to_silver_upsert(
+        self,
+        keys,
+        sequence_by,
+        source_entities = None,
+        target_entity = None,
+        ignore_null_updates = False,
+        apply_as_deletes = None,
+        apply_as_truncates = None,
+        column_list = None,
+        except_column_list = None,
+        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+        partition_cols = None,
+        expectations = None,
+        ):
+        """ Bronze to Silver, upsert """
+
+        if not partition_cols:
+            partition_cols = []
+        if not source_entities:
+            source_entities = [self.entity]
+        if not target_entity:
+            target_entity = self.entity
+
+        _bronze_to_silver_upsert(
+            source_entities=source_entities,
+            target_entity=target_entity,
+            keys=keys,
+            sequence_by=sequence_by,
+            ignore_null_updates=ignore_null_updates,
+            apply_as_deletes=apply_as_deletes,
+            apply_as_truncates=apply_as_truncates,
+            column_list=column_list,
+            except_column_list=except_column_list,
+            parse=parse,
+            partition_cols=partition_cols,
+            expectations=expectations,
+            tags=self.tags,
+        )
+
+    def bronze_to_silver_track_changes(
+        self,
+        keys,
+        sequence_by,
+        source_entities = None,
+        target_entity = None,
+        ignore_null_updates = False,
+        apply_as_deletes = None,
+        apply_as_truncates = None,
+        column_list = None,
+        except_column_list = None,
+        track_history_column_list = None,
+        track_history_except_column_list = None,
+        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+        partition_cols = None,
+        expectations = None,
+        ):
+        """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
+
+        if not source_entities:
+            source_entities = [self.entity]
+        if not target_entity:
+            target_entity = self.entity
+        if not partition_cols:
+            partition_cols = []
+
+        _bronze_to_silver_track_changes(
+            source_entities=source_entities,
+            target_entity=target_entity,
+            keys=keys,
+            sequence_by=sequence_by,
+            tags=self.tags,
+            ignore_null_updates=ignore_null_updates,
+            apply_as_deletes=apply_as_deletes,
+            apply_as_truncates=apply_as_truncates,
+            column_list=column_list,
+            except_column_list=except_column_list,
+            track_history_column_list=track_history_column_list,
+            track_history_except_column_list=track_history_except_column_list,
+            parse=parse,
+            partition_cols=partition_cols,
+            expectations=expectations,
+        )
+
+    @deprecated
+    def bronze_to_silver(
+        self,
+        source_entities = None,
+        target_entity = None,
+        keys = None,
+        sequence_by = None,
+        ignore_null_updates = False,
+        apply_as_deletes = None,
+        apply_as_truncates = None,
+        column_list = None,
+        except_column_list = None,
+        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+        partition_cols = None,
+        expectations = None,
+        ):
+        """ Bronze to Silver, append (if no keys) or upsert (if keys and sequence_by is specified) """
+
+        if not partition_cols:
+            partition_cols = []
+        if not source_entities:
+            source_entities = [self.entity]
+        if not target_entity:
+            target_entity = self.entity
+
+        if keys and len(keys) > 0:
+
+            if not sequence_by:
+                raise Exception("sequence_by must be specified for upserts")
+
+            _bronze_to_silver_upsert(
+                source_entities=source_entities,
+                target_entity=target_entity,
+                keys=keys,
+                sequence_by=sequence_by,
+                ignore_null_updates=ignore_null_updates,
+                apply_as_deletes=apply_as_deletes,
+                apply_as_truncates=apply_as_truncates,
+                column_list=column_list,
+                except_column_list=except_column_list,
+                parse=parse,
+                partition_cols=partition_cols,
+                expectations=expectations,
+                tags=self.tags,
+            )
+
+        else:
+            _bronze_to_silver_append(
+                source_entities=source_entities,
+                target_entity=target_entity,
+                parse=parse,
+                partition_cols=partition_cols,
+                expectations=expectations,
+                tags=self.tags,
+            )
+
+    def silver_to_gold(
+        self,
+        name,
+        source_entities = None,
+        target_entity = None,
+        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
+        expectations = None
+        ):
+        """ Bronze to Silver """
+
+        if not source_entities:
+            source_entities = [self.entity]
+        if not target_entity:
+            target_entity = self.entity
+        if not expectations:
+            expectations = {}
+
+        @dlt.table(
+            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
+            name=f"gold_{target_entity}_{name}",
+            table_properties={
+                "quality": "gold",
+                "pipelines.reset.allowed": "false"
+            },
+        )
+        @dlt.expect_all(expectations)
+        def dlt_table():
+            return (
+                _union_streams([f"silver_{t}" for t in source_entities])
+                .transform(parse)
+            )
