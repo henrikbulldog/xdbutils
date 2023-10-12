@@ -10,7 +10,7 @@ from pyspark.sql.functions import col, current_timestamp, expr, lit
 from xdbutils.deprecation import deprecated
 
 try:
-    import dlt  # pylint: disable=import-error
+    import dlt  # type: ignore
 except ImportError:
     from unittest.mock import MagicMock
     class MockDlt:
@@ -84,7 +84,7 @@ def _create_or_update_workflow(
                 databricks_host=databricks_host,
                 databricks_token=databricks_token
                 )
-    except:
+    except: # pylint: disable=bare-except
         # Cannot get information from notebook context, give up
         return
 
@@ -193,7 +193,7 @@ def _create_workflow(
 
 def _union_streams(sources):
     source_tables = [dlt.read_stream(t) for t in sources]
-    unioned = reduce(lambda x,y: x.union(y), source_tables)
+    unioned = reduce(lambda x,y: x.unionAll(y), source_tables)
     return unioned
 
 def _bronze_to_silver_append(
@@ -319,7 +319,8 @@ def _bronze_to_silver_track_changes(
     expectations = None,
     tags = None,
     ):
-    """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
+    """ Bronze to Silver, change data capture,
+    see https://docs.databricks.com/en/delta-live-tables/cdc.html """
 
     if not partition_cols:
         partition_cols = []
@@ -503,7 +504,10 @@ class DLTPipeline():
             "kafka.group.id"           : eventhub_group_id,
             "kafka.sasl.mechanism"     : "PLAIN",
             "kafka.security.protocol"  : "SASL_SSL",
-            "kafka.sasl.jaas.config"   : f"kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$ConnectionString\" password=\"{eventhub_connection_string}\";",
+            "kafka.sasl.jaas.config"   : 
+                "kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule" +
+                " required username=\"$ConnectionString\"" +
+                f" password=\"{eventhub_connection_string}\";",
             "kafka.request.timeout.ms" : "6000",
             "kafka.session.timeout.ms" : "6000",
             "maxOffsetsPerTrigger"     : "600",
@@ -619,7 +623,8 @@ class DLTPipeline():
         partition_cols = None,
         expectations = None,
         ):
-        """ Bronze to Silver, change data capture, see https://docs.databricks.com/en/delta-live-tables/cdc.html """
+        """ Bronze to Silver, change data capture,
+        see https://docs.databricks.com/en/delta-live-tables/cdc.html """
 
         if not source_entities:
             source_entities = [self.entity]
@@ -662,7 +667,8 @@ class DLTPipeline():
         partition_cols = None,
         expectations = None,
         ):
-        """ Bronze to Silver, append (if no keys) or upsert (if keys and sequence_by is specified) """
+        """ Bronze to Silver, append (if no keys) or upsert
+        (if keys and sequence_by is specified) """
 
         if not partition_cols:
             partition_cols = []
@@ -674,7 +680,7 @@ class DLTPipeline():
         if keys and len(keys) > 0:
 
             if not sequence_by:
-                raise Exception("sequence_by must be specified for upserts")
+                raise ValueError("sequence_by must be specified for upserts")
 
             _bronze_to_silver_upsert(
                 source_entities=source_entities,
