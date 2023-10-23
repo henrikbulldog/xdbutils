@@ -23,17 +23,6 @@ except ImportError:
             return MagicMock()
     dlt = MockDlt()
 
-def _fix_column_names(df):
-    r = re.compile(r"\s+")
-    current_columns = df.columns
-    new_columns = list(map(lambda item : r.sub("_", item), current_columns))
-    return reduce(lambda data,
-                idx: data.withColumnRenamed(
-                    current_columns[idx],
-                    new_columns[idx]),
-                range(len(current_columns)),
-                df)
-
 def _create_or_update_workflow(
     dbutils,
     source_system,
@@ -481,7 +470,7 @@ class DLTPipeline():
             if quarantine_rules:
                 result_df = result_df.withColumn("_quarantined", expr(quarantine_rules))
 
-            return _fix_column_names(result_df)
+            return result_df
 
     def event_to_bronze(
         self,
@@ -549,7 +538,7 @@ class DLTPipeline():
             if quarantine_rules:
                 result_df = result_df.withColumn("_quarantined", expr(quarantine_rules))
 
-            return _fix_column_names(result_df)
+            return result_df
 
     def bronze_to_silver_append(
         self,
