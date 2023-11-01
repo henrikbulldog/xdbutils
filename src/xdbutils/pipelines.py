@@ -1,6 +1,5 @@
 """ Delta Live Tables Pipelines """
 
-import re
 from functools import reduce
 from typing import Callable
 import urllib
@@ -193,6 +192,11 @@ def _create_workflow(
 
 def _union_streams(sources):
     source_tables = [dlt.read_stream(t) for t in sources]
+    unioned = reduce(lambda x,y: x.unionAll(y), source_tables)
+    return unioned
+
+def _union_tables(sources):
+    source_tables = [dlt.read(t) for t in sources]
     unioned = reduce(lambda x,y: x.unionAll(y), source_tables)
     return unioned
 
@@ -736,6 +740,6 @@ class DLTPipeline():
         @dlt.expect_all(expectations)
         def dlt_table():
             return (
-                _union_streams([f"silver_{t}" for t in source_entities])
+                _union_tables([f"silver_{t}" for t in source_entities])
                 .transform(parse)
             )

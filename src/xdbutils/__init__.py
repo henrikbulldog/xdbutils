@@ -15,7 +15,7 @@ class XDBUtils():
         self._transforms = Transforms(self.spark)
 
     @property
-    def fs(self):
+    def fs(self): # pylint: disable=invalid-name
         """ File system """
         return self._fs
 
@@ -125,7 +125,14 @@ class Transforms():
         value_columns: list[str] = None,
     ) -> DataFrame:
         """ Calculate the changes in a slow changing dimension type 2 """
-        return scd2.diff(self.spark, current_data_df, key_columns, latest_version_df, handle_deletions, value_columns)
+        return scd2.diff(
+            self.spark,
+            current_data_df,
+            key_columns,
+            latest_version_df,
+            handle_deletions,
+            value_columns,
+            )
 
 
 class FileSystem():
@@ -135,7 +142,7 @@ class FileSystem():
         self.spark = spark
         self.dbutils = dbutils
 
-    def ls(
+    def ls( # pylint: disable=invalid-name
             self,
             path: str = None,
             print_files: bool = False,
@@ -146,7 +153,7 @@ class FileSystem():
         lines = []
         try:
             files = self.dbutils.fs.ls(path)
-        except:
+        except: # pylint: disable=bare-except
             lines.append("Not found: " + path)
             return lines
         file_count = 0
@@ -164,8 +171,10 @@ class FileSystem():
                     min_size = min(size, min_size)
                     max_size = max(size, max_size)
             if file_count > 0:
-                lines.append(f"{indent}{path}: {file_count}"
-                             + f" files avg size: {file_size / file_count}, min: {min_size}, max: {max_size}")
+                lines.append(
+                    f"{indent}{path}: {file_count}"
+                    + f" files avg size: {file_size / file_count},"
+                    + f" min: {min_size}, max: {max_size}")
             for file_info in files:
                 if not file_info.name.endswith("/") \
                     and (file_info.name.endswith(data_file_extension)
@@ -185,6 +194,6 @@ class FileSystem():
 
         try:
             self.dbutils.fs.ls(path)
-        except:
+        except: # pylint: disable=bare-except
             return False
         return True
