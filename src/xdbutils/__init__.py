@@ -4,6 +4,8 @@ from pyspark.sql import DataFrame
 from xdbutils.datalakehouse import DataLakehouse
 from xdbutils.pipelines import DLTPipeline
 from xdbutils.transforms import scd2
+from xdbutils.deprecation import deprecated
+from xdbutils.deprecation import deprecated
 
 class XDBUtils():
     """ Extended Databricks Utilities """
@@ -28,6 +30,33 @@ class XDBUtils():
         """ Create data Lake House """
         return DataLakehouse(self.spark, raw_path, bronze_path, silver_path, gold_path)
 
+    def create_dlt_pipeline(
+        self,
+        source_system,
+        entity,
+        catalog,
+        tags = None,
+        continuous_workflow = False,
+        databricks_token = None,
+        databricks_host = None,
+        source_path = None,
+        ):
+        """ Create a Delta Live Tables Pipeline """
+
+        return DLTPipeline(
+            spark=self.spark,
+            dbutils=self.dbutils,
+            source_system=source_system,
+            entity=entity,
+            catalog=catalog,
+            tags=tags,
+            continuous_workflow=continuous_workflow,
+            databricks_token=databricks_token,
+            databricks_host=databricks_host,
+            source_path=source_path,
+            )
+
+    @deprecated
     def create_dlt_batch_pipeline(
         self,
         source_system,
@@ -53,6 +82,7 @@ class XDBUtils():
             source_path=source_path
         )
 
+    @deprecated
     def create_dlt_event_pipeline(
         self,
         source_system,
@@ -72,10 +102,10 @@ class XDBUtils():
             entity=entity,
             catalog=catalog,
             tags=tags,
+            continuous_workflow=True,
             databricks_token=databricks_token,
             databricks_host=databricks_host,
             source_path=source_path,
-            continuous_workflow=True,
             )
 
     def expose_dlt_tables(self, from_catalog, silver_catalog, gold_catalog):

@@ -39,6 +39,18 @@ def _create_or_update_workflow(
         tags = {}
 
     try:
+        is_job = (
+            dbutils.notebook.entry_point.getDbutils()
+            .notebook().getContext().currentRunId().isDefined()
+            )
+
+        if is_job:
+            return
+    except Exception as exc: # pylint: disable=broad-exception-caught
+        print("Could not determine if this is a job run from notebook context.", exc)
+        return
+
+    try:
         if not databricks_host:
             databricks_host = (
                 dbutils
@@ -46,14 +58,22 @@ def _create_or_update_workflow(
                 .notebook().getContext()
                 .tags().get("browserHostName").get()
             )
+    except Exception as exc: # pylint: disable=broad-exception-caught
+        print("Could not get databricks host from notebook context, please specify databricks_host.", exc)
+        return
 
+    try:
         if not source_path:
             source_path = (
                 dbutils.notebook.entry_point.getDbutils()
                 .notebook().getContext()
                 .notebookPath().get()
             )
+    except Exception as exc: # pylint: disable=broad-exception-caught
+        print("Could not get source path from notebook context, please specify source_path.", exc)
+        return
 
+    try:
         workflow_settings = _get_workflow_settings(
             source_system=source_system,
             entity=entity,
@@ -83,8 +103,9 @@ def _create_or_update_workflow(
                 databricks_host=databricks_host,
                 databricks_token=databricks_token
                 )
-    except: # pylint: disable=bare-except
+    except Exception as exc: # pylint: disable=broad-exception-caught
         # Cannot get information from notebook context, give up
+        print("Could not create DLT workflow.", exc)
         return
 
 def _get_workflow_settings(
@@ -389,10 +410,10 @@ class DLTPipeline():
         entity,
         catalog,
         tags = None,
+        continuous_workflow = False,
         databricks_token = None,
         databricks_host = None,
         source_path = None,
-        continuous_workflow = False
         ):
 
         self.spark = spark
