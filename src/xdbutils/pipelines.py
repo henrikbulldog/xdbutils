@@ -39,18 +39,6 @@ def _create_or_update_workflow(
         tags = {}
 
     try:
-        is_job = (
-            dbutils.notebook.entry_point.getDbutils()
-            .notebook().getContext().currentRunId().isDefined()
-            )
-
-        if is_job:
-            return
-    except Exception as exc: # pylint: disable=broad-exception-caught
-        print("Could not determine if this is a job run from notebook context.", exc)
-        return
-
-    try:
         if not databricks_host:
             databricks_host = (
                 dbutils
