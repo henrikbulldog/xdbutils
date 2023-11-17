@@ -31,26 +31,27 @@ Just pip install directly from the repo:
 ```
 
 # Using the Delta Live Tables (DLT) Framework
-In order to set up a Delta Live Tables pipeline, simply create a python notebook in Databricks and, depending on the use case, call one of the methods
-- File-based batch ingestion: XDBUtils.create_dlt_batch_pipeline()
-- Event-based ingestion: XDBUtils.create_dlt_event_pipeline()
-
+In order to set up a Delta Live Tables pipeline, simply create a python notebook in Databricks and the method XDBUtils.create_dlt_pipeline().
 
 ## File-based batch ingestion
 This section shows how to set up a pipeline for ingesting files that is scheduled to run at intervals. Only newly arrived files are processed (DLT uses AutoLoader to kep track of new files).
 
-See also example notebook: [dlt_testcdc_employee.ipynb](https://github.com/henrikbulldog/xdbutils/blob/main/dlt_testcdc_employee.ipynb)
+See also example notebook: [dlt_demo_employee.ipynb](https://github.com/henrikbulldog/xdbutils/blob/main/dlt_demo_employee.ipynb).
+
+The resulting workflow wil look like this:
+
+![Employee workflow](employee_workflow.png)
 
 ### Create the Pipeline
-Calling the method XDBUtils.create_dlt_batch_pipeline() will create or update a non-contiuous (scheduled) DLT workflow. The workflow will be named `<source_system>-<entity>`.
+Calling the method XDBUtils.create_dlt_pipeline() will create or update a DLT workflow. The workflow will be named `<source_system>-<entity>`.
 
 ```python
 from xdbutils import XDBUtils
 
 xdbutils = XDBUtils(spark, dbutils)
 
-pipeline = xdbutils.create_dlt_batch_pipeline(
-  source_system="testcdc",
+pipeline = xdbutils.create_dlt_pipeline(
+  source_system="demo",
   entity="employee",
   catalog="testing_dlt",
   tags={
@@ -62,13 +63,14 @@ pipeline = xdbutils.create_dlt_batch_pipeline(
 )
 ```
 
-XDBUtils.create_dlt_batch_pipeline() parameters:
+XDBUtils.create_dlt_pipeline() parameters:
 
 |Parameter|Description|
 |---------|-----------|
 |**source_system**|Source system, this name will be used to create a schema in Unity Catalog|
 |**catalog**|Name of Unity Catalog to use|
 |tags|Tags will be added to the DTL workflow configuration and to Delta table description in Data Explorer|
+|continuous_workflow|If true: Run DLT workflow in continuous mode, if false: run the workflow scheduled. Default: false|
 |databricks_token|A Databricks access token for [authentication to the Databricks API](https://docs.databricks.com/en/dev-tools/auth.html#databricks-personal-access-token-authentication)|
 |databricks_host|If omitted, the framework will get the host from the calling notebook context|
 |source_path|If omitted, the framework will use the path to the calling notebook|
@@ -95,11 +97,11 @@ The code above will create a DLT workflow with this definition:
     "libraries": [
         {
             "notebook": {
-                "path": ".../DLT/testcdc/employee/dlt_testcdc_employee"
+                "path": ".../DLT/demo/employee/dlt_demo_employee"
             }
         }
     ],
-    "name": "testcdc-employee",
+    "name": "demo-employee",
     "edition": "ADVANCED",
     "catalog": "testing_dlt",
     "configuration": {
@@ -107,10 +109,10 @@ The code above will create a DLT workflow with this definition:
         "data_owner": "Henrik Thomsen",
         "cost_center": "123456",
         "documentation": "https://github.com/henrikbulldog/xdbutils",
-        "Source system": "testcdc",
+        "Source system": "demo",
         "Entity": "employee"
     },
-    "target": "testcdc"
+    "target": "demo"
 }
 ```
 
@@ -121,10 +123,10 @@ Let's create some test data:
 import json
 
 # Delete any existing files
-dbutils.fs.rm("FileStore/datalakehouse/raw/testcdc/employee/", True)
+dbutils.fs.rm("FileStore/datalakehouse/raw/demo/employee/", True)
 
 # Delete AutoLoader checkpoints
-dbutils.fs.rm("FileStore/datalakehouse/raw/checkpoints/testcdc/employee/", True)
+dbutils.fs.rm("FileStore/datalakehouse/raw/checkpoints/demo/employee/", True)
 
 employees1 = [
   {
@@ -151,7 +153,7 @@ employees1 = [
 ]
 
 dbutils.fs.put(
-  "FileStore/datalakehouse/raw/testcdc/employee/employee-20230101-115111.json",
+  "FileStore/datalakehouse/raw/demo/employee/employee-20230101-115111.json",
   contents=json.dumps(employees1)
   )
 
@@ -187,7 +189,7 @@ employees2 = [
 ]
 
 dbutils.fs.put(
-  "FileStore/datalakehouse/raw/testcdc/employee/employee-20230102-125212.json",
+  "FileStore/datalakehouse/raw/demo/employee/employee-20230102-125212.json",
   contents=json.dumps(employees2)
   )  
 ```
@@ -229,7 +231,7 @@ pipeline.raw_to_bronze(
 )
 ```
 
-This will create the table <catalog>.<source system>.bronze_<entity>, for example testing_dlt.testcdc.bronze_employee.
+This will create the table <catalog>.<source system>.bronze_<entity>, for example testing_dlt.demo.bronze_employee.
 
 ```
 +-----+--------+-----------+---------+--------------------------+-------------+-----------------------+------------+
@@ -282,7 +284,7 @@ pipeline.bronze_to_silver_upsert(
   )
 ```
 
-This will create the table `<catalog>.<source system>.silver_<entity>`, for example `testing_dlt.testcdc.silver_employee`.
+This will create the table `<catalog>.<source system>.silver_<entity>`, for example `testing_dlt.demo.silver_employee`.
 
 ```
 +------+--------+--------+---------+--------------------------+
@@ -326,7 +328,7 @@ pipeline.bronze_to_silver_track_changes(
   )
   ```
 
-This will create the table `<catalog>.<source system>.silver_<entity>_changes`, for example `testing_dlt.testcdc.silver_employee_changes`. In this example changes are tracked using SCD type 2, meaning the columns __START_AT and __END_AT specifies the time period for the row.
+This will create the table `<catalog>.<source system>.silver_<entity>_changes`, for example `testing_dlt.demo.silver_employee_changes`. In this example changes are tracked using SCD type 2, meaning the columns __START_AT and __END_AT specifies the time period for the row.
 
 ```
 +------+--------+-----------+---------+--------------------------+--------------------------+--------------------------+
@@ -381,36 +383,42 @@ This will create the tables `<catalog>.<source system>.gold_<entity>_<name>`, fo
 ## Event-Based ingestion
 This section shows how to set up a pipeline the ingests data from an event hub.
 
-See also example notebook: [dlt_testeventhub_clickviews.ipynb](https://github.com/henrikbulldog/xdbutils/blob/main/dlt_testeventhub_clickviews.ipynb)
+See also example notebook: [dlt_demo_clickstream.ipynb](https://github.com/henrikbulldog/xdbutils/blob/main/dlt_demo_clickstream.ipynb).
+
+The resulting DLT workflow will look like this:
+
+![clickstream workflow](clickstream_workflow.png)
 
 ### Create the Pipeline
-Calling the method XDBUtils.create_dlt_event_pipeline() will create or update a continuous DLT workflow. The workflow will be named `<source_system>-<entity>`.
+Calling the method XDBUtils.create_dlt_pipeline() will create or update a. The workflow will be named `<source_system>-<entity>`. Set parameter continuous_workflow = True to make the workflow run continuously.
 
 ```python
 from xdbutils import XDBUtils
 
 xdbutils = XDBUtils(spark, dbutils)
 
-pipeline = xdbutils.create_dlt_event_pipeline(
-  source_system="testeventhub",
-  entity="clickviews",
+pipeline = xdbutils.create_dlt_pipeline(
+  source_system="demo",
+  entity="clickstream",
   catalog="testing_dlt",
   tags={
     "data_owner": "Henrik Thomsen",
     "cost_center": "123456",
     "documentation": "https://github.com/henrikbulldog/xdbutils"
   },
+  continuous_workflow = True,
   databricks_token=dbutils.secrets().get(scope="<scope>", key="<secret>")
 )
 ```
 
-XDBUtils.create_dlt_event_pipeline() parameters:
+XDBUtils.create_dlt_pipeline() parameters:
 
 |Parameter|Description|
 |---------|-----------|
 |**source_system**|Source system, this name will be used to create a schema in Unity Catalog|
 |**catalog**|Name of Unity Catalog to use|
 |tags|Tags will be added to the DTL workflow configuration and to Delta table description in Data Explorer|
+|continuous_workflow|If true: Run DLT workflow in continuous mode, if false: run the workflow scheduled. Default: false|
 |databricks_token|A Databricks access token for [authentication to the Databricks API](https://docs.databricks.com/en/dev-tools/auth.html#databricks-personal-access-token-authentication)|
 |databricks_host|If omitted, the framework will get the host from the calling notebook context|
 |source_path|If omitted, the framework will use the path to the calling notebook|
@@ -437,11 +445,11 @@ The code above will create a DLT workflow with this definition:
     "libraries": [
         {
             "notebook": {
-                "path": ".../DLT/testeventhub/test/dlt_testeventhub_test"
+                "path": ".../DLT/demo/test/dlt_demo_test"
             }
         }
     ],
-    "name": "testeventhub-test",
+    "name": "demo-test",
     "edition": "ADVANCED",
     "catalog": "testing_dlt",
     "configuration": {
@@ -449,10 +457,10 @@ The code above will create a DLT workflow with this definition:
         "data_owner": "Henrik Thomsen",
         "cost_center": "123456",
         "documentation": "https://github.com/henrikbulldog/xdbutils",
-        "Source system": "testeventhub",
-        "Entity": "clickviews"
+        "Source system": "demo",
+        "Entity": "clickstream"
     },
-    "target": "testeventhub"
+    "target": "demo"
 }
 ```
 
@@ -472,14 +480,14 @@ In order to ingest data from an event hub to bronze, call event_to_bronze() with
 
 ```python
 pipeline.event_to_bronze(
-  eventhub_namespace="testeventhub",
-  eventhub_name="testihubi2",
-  eventhub_group_id="test-cg",
+  eventhub_namespace="<event hub namespace>",
+  eventhub_name="<event hub name>",
+  eventhub_group_id="<event hub group id>",
   eventhub_connection_string=dbutils.secrets().get(scope="<scope>", key="<secret>")
 )
 ```
 
-This will create the table <catalog>.<source system>.bronze_<entity>, for example testing_dlt.testeventhub.clickviews.
+This will create the table <catalog>.<source system>.bronze_<entity>, for example testing_dlt.demo.clickstream.
 
 ```
 +----+-----+----------+---------+------+----------------------+-------------+-----------------------+------------+
@@ -543,7 +551,7 @@ pipeline.bronze_to_silver(
 )
 ```
 
-This will create the table `<catalog>.<source system>.silver_<entity>`, for example `testing_dlt.testeventhub.silver_clickviews`.
+This will create the table `<catalog>.<source system>.silver_<entity>`, for example `testing_dlt.demo.silver_clickstream`.
 
 ```
 +-------------------+------------+------------------------------------+------------------------------------+----------------------------------+-------------------+--------------------------------+-------+-------+------------------+-------------------+-------------+----------+----------+------+-----------+
@@ -558,7 +566,6 @@ This will create the table `<catalog>.<source system>.silver_<entity>`, for exam
 |2020-07-25 9:15:25 |90.12.45.67 |31ceebd2-0273-4841-9bf9-316e7bed8845|531d32f2-502e-41f9-9451-3fcdac6ac1ba|/.netlify/functions/contact       |?from=socialMedia  |http://example.com/contact.html |Windows|Chrome |3700              |426368             |1900         |50        |phone     |false |null       |
 +-------------------+------------+------------------------------------+------------------------------------+----------------------------------+-------------------+--------------------------------+-------+-------+------------------+-------------------+-------------+----------+----------+------+-----------+
 ```
-
 
 # Using the Data Lakehouse Framework
 If you prefer to set up data pipelines with straight up pythoin rather than Delta Live Tables, you can use the method XDButils.create_datalakehouse().

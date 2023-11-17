@@ -47,7 +47,8 @@ def _create_or_update_workflow(
                 .tags().get("browserHostName").get()
             )
     except Exception as exc: # pylint: disable=broad-exception-caught
-        print("Could not get databricks host from notebook context, please specify databricks_host.", exc)
+        print("Could not get databricks host from notebook context,", 
+              "please specify databricks_host.", exc)
         return
 
     try:
@@ -58,7 +59,8 @@ def _create_or_update_workflow(
                 .notebookPath().get()
             )
     except Exception as exc: # pylint: disable=broad-exception-caught
-        print("Could not get source path from notebook context, please specify source_path.", exc)
+        print("Could not get source path from notebook context,",
+              "please specify source_path.", exc)
         return
 
     try:

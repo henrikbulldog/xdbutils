@@ -69,7 +69,6 @@ class XDBUtils():
         ):
         """ Create a Delta Live Tables File/Batch Pipeline """
 
-
         return DLTPipeline(
             spark=self.spark,
             dbutils=self.dbutils,
