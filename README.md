@@ -662,6 +662,9 @@ bronze2silver_job.run()
 )
 ```
 
+## GDPR Right to be Forgotten
+The XDBUtils DLT Framework supports Solution 3 (a) as described in https://www.databricks.com/blog/handling-right-be-forgotten-gdpr-and-ccpa-using-delta-live-tables-dlt.
+
 # Using Databricks Connect
 See https://learn.microsoft.com/en-us/azure/databricks/dev-tools/databricks-connect
 

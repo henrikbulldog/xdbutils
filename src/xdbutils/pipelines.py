@@ -234,8 +234,7 @@ def _bronze_to_silver_append(
         comment=", ".join([f"{e}: {tags[e]}" for e in tags.keys()]),
         name=f"silver_{target_entity}",
         table_properties={
-            "quality": "silver",
-            "pipelines.reset.allowed": "false"
+            "quality": "silver"
         },
         partition_cols=partition_cols,
     )
@@ -299,8 +298,7 @@ def _bronze_to_silver_upsert(
         name=f"silver_{target_entity}",
         comment=", ".join([f"{e}: {tags[e]}" for e in tags.keys()]),
         table_properties={
-            "quality": "bronze",
-            "pipelines.reset.allowed": "false"
+            "quality": "bronze"
         },
         partition_cols=partition_cols,
         )
@@ -368,8 +366,7 @@ def _bronze_to_silver_track_changes(
         name=f"silver_{target_entity}_changes",
         comment=", ".join([f"{e}: {tags[e]}" for e in tags.keys()]),
         table_properties={
-            "quality": "bronze",
-            "pipelines.reset.allowed": "false"
+            "quality": "bronze"
         },
         partition_cols=partition_cols,
         )
@@ -462,7 +459,7 @@ class DLTPipeline():
             name=f"bronze_{target_entity}",
             table_properties={
                 "quality": "bronze",
-                "pipelines.reset.allowed": "false"
+                "pipeline.reset.allow": "false"
             },
             partition_cols=partition_cols,
         )
@@ -535,7 +532,7 @@ class DLTPipeline():
             name=f"bronze_{target_entity}",
             table_properties={
                 "quality": "bronze",
-                "pipelines.reset.allowed": "false"
+                "pipeline.reset.allow": "false"
             },
             partition_cols=partition_cols,
         )
@@ -744,8 +741,7 @@ class DLTPipeline():
             comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
             name=f"gold_{target_entity}_{name}",
             table_properties={
-                "quality": "gold",
-                "pipelines.reset.allowed": "false"
+                "quality": "gold"
             },
         )
         @dlt.expect_all(expectations)
