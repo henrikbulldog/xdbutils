@@ -673,7 +673,7 @@ Wait patiently when running the notebok:
 - The DLT pipeline is started with selected full refresh for silver and gold tables and this notebook waits for it to complete
 - Tables are checked to see if data has been removed
 
-Call XDButils.delete_from_dlt() with parameters:
+Call XDButils.delete_rows_from_dlt() with parameters:
 
 |Parameter|Description|
 |-|-|
@@ -690,7 +690,7 @@ from xdbutils import XDBUtils
 
 xdbutils = XDBUtils(spark, dbutils)
 
-xdbutils.delete_from_dlt(
+xdbutils.delete_rows_from_dlt(
     id_column = dbutils.widgets.get("id_column"),
     ids = dbutils.widgets.get("ids").split(","),
     source_system = dbutils.widgets.get("source_system"),
