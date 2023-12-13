@@ -23,6 +23,7 @@ except ImportError:
     dlt = MockDlt()
 
 def _create_or_update_workflow(
+    spark,
     dbutils,
     source_system,
     entity,
@@ -40,12 +41,7 @@ def _create_or_update_workflow(
 
     try:
         if not databricks_host:
-            databricks_host = (
-                dbutils
-                .notebook.entry_point.getDbutils()
-                .notebook().getContext()
-                .tags().get("browserHostName").get()
-            )
+            databricks_host = spark.conf.get("spark.databricks.workspaceUrl")
     except Exception as exc: # pylint: disable=broad-exception-caught
         print("Could not get databricks host from notebook context,", 
               "please specify databricks_host.", exc)
@@ -200,6 +196,213 @@ def _create_workflow(
         )
 
     response.raise_for_status()
+
+def _get_latest_workflow_update(
+    pipeline_id,
+    databricks_host,
+    databricks_token,
+):
+    params = urllib.parse.urlencode(
+        {
+            "order_by": "timestamp desc",
+            "max_results": 100,
+        },
+        quote_via=urllib.parse.quote,
+    )
+
+    response = requests.get(
+        url=f"https://{databricks_host}/api/2.0/pipelines/{pipeline_id}/events",
+        params=params,
+        headers={"Authorization": f"Bearer {databricks_token}"},
+        timeout=60,
+    )
+
+    payload = response.json()
+
+    updates = [
+        e["origin"]["update_id"]
+        for e in payload["events"]
+        if e["event_type"] == "create_update"
+    ]
+
+    if not updates:
+        return None
+
+    return next(iter(updates), None)
+
+def _get_workflow_datasets(
+    pipeline_id,
+    update_id,
+    databricks_host,
+    databricks_token,
+):
+    params = urllib.parse.urlencode(
+        {
+            "order_by": "timestamp desc",
+            "max_results": 100,
+        },
+        quote_via=urllib.parse.quote,
+    )
+
+    response = requests.get(
+        url=f"https://{databricks_host}/api/2.0/pipelines/{pipeline_id}/events",
+        params=params,
+        headers={"Authorization": f"Bearer {databricks_token}"},
+        timeout=60,
+    )
+
+    payload = response.json()
+
+    return [
+        e["details"]["flow_definition"]["output_dataset"]
+        for e in payload["events"]
+        if e["event_type"] == "flow_definition"
+        and e["origin"]["update_id"] == update_id
+    ]
+
+def _refresh_workflow(
+    pipeline_id,
+    databricks_host,
+    databricks_token,
+    full_refresh=False,
+    refresh_selection=[],
+    full_refresh_selection=[],
+):
+    refresh_settings = {
+        "full_refresh": full_refresh,
+        "refresh_selection": refresh_selection,
+        "full_refresh_selection": full_refresh_selection,
+    }
+
+    response = requests.post(
+        url=f"https://{databricks_host}/api/2.0/pipelines/{pipeline_id}/updates",
+        json=refresh_settings,
+        headers={"Authorization": f"Bearer {databricks_token}"},
+        timeout=60,
+    )
+
+    response.raise_for_status()
+
+def _get_workflow_progress(
+    pipeline_id,
+    update_id,
+    databricks_host,
+    databricks_token,
+):
+    params = urllib.parse.urlencode(
+        {
+            "order_by": "timestamp desc",
+            "max_results": 100,
+        },
+        quote_via=urllib.parse.quote,
+    )
+
+    response = requests.get(
+        url=f"https://{databricks_host}/api/2.0/pipelines/{pipeline_id}/events",
+        params=params,
+        headers={"Authorization": f"Bearer {databricks_token}"},
+        timeout=60,
+    )
+
+    payload = response.json()
+
+    updates = [
+        e["details"]["update_progress"]["state"]
+        for e in payload["events"]
+        if e["event_type"] == "update_progress"
+        and e["origin"]["update_id"] == update_id
+    ]
+
+    if not updates:
+        return None
+
+    return next(iter(updates), None)
+
+def _delete(
+    spark,
+    source_system,
+    entity,
+    id_column,
+    ids,
+    catalog,
+    databricks_token,
+    databricks_host = None,
+):
+    if not databricks_host:
+        databricks_host = spark.conf.get("spark.databricks.workspaceUrl")
+
+    pipeline_id = _get_workflow_id(
+        source_system=source_system,
+        entity=entity,
+        databricks_host=databricks_host,
+        databricks_token=databricks_token,
+    )
+    assert pipeline_id, f"Pipeline {source_system}-{entity} not found"
+
+    update_id = _get_latest_workflow_update(
+        pipeline_id=pipeline_id,
+        databricks_host=databricks_host,
+        databricks_token=databricks_token,
+    )
+    assert update_id, f"Pipeline {source_system}-{entity}: latest update not found"
+
+    datasets = _get_workflow_datasets(
+        pipeline_id=pipeline_id,
+        update_id=update_id,
+        databricks_host=databricks_host,
+        databricks_token=databricks_token,
+    )
+    assert datasets, f"Pipeline {source_system}-{entity}: cannot find datasets"
+    bronze_tables = [d for d in list(datasets) if d.startswith("bronze_")]
+    non_bronze_tables = [
+        d
+        for d in list(datasets)
+        if not d.startswith("bronze_") and not d.startswith("view_")
+    ]
+
+    for bronze_table in bronze_tables:
+        ids_string = ",".join([f"'{id}'" for id in ids])
+        statement = f"delete from {catalog}.{source_system}.{bronze_table} where {id_column} in ({ids_string})"
+        print(statement)
+        spark.sql(statement)
+
+    print(f"Running pipeline {source_system}-{entity} with full refresh of: {', '.join(non_bronze_tables)}")
+    _refresh_workflow(
+        pipeline_id=pipeline_id,
+        databricks_host=databricks_host,
+        databricks_token=databricks_token,
+        full_refresh_selection=non_bronze_tables,
+    )
+
+    update_id = _get_latest_workflow_update(
+        pipeline_id=pipeline_id,
+        databricks_host=databricks_host,
+        databricks_token=databricks_token,
+    )
+    assert update_id, f"Pipeline {source_system}-{entity}: latest update not found"
+
+    for x in range(60):
+        time.sleep(10)
+        progress = _get_workflow_progress(
+            pipeline_id=pipeline_id,
+            update_id=update_id,
+            databricks_host=databricks_host,
+            databricks_token=databricks_token,
+        )
+        print(f"{source_system}-{entity}, update_id: {update_id}, progress: {progress}")
+        if progress:
+            assert progress.lower() != "failed", f"Pipeline {source_system}-{entity}: update failed"
+            if progress.lower() == "completed":
+                break
+
+    tables = [d for d in list(datasets) if not d.startswith("view_")]
+    for table in tables:
+        df = spark.sql(f"select * from {catalog}.{source_system}.{table}")
+        if any(column == id_column for column in df.columns):
+            print(f"Checking table {table} for {id_column} in {ids}")
+            assert (
+                df.where(col(id_column).isin(ids)).count() == 0
+            ), f"{table} contains {id_column} in {ids}"
 
 def _union_streams(sources):
     source_tables = [dlt.read_stream(t) for t in sources]
@@ -416,6 +619,7 @@ class DLTPipeline():
         self.tags["Entity"] = self.entity
 
         _create_or_update_workflow(
+            spark=self.spark,
             dbutils=self.dbutils,
             source_system=self.source_system,
             entity=self.entity,

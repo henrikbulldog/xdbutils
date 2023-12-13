@@ -139,6 +139,28 @@ class XDBUtils():
                         from {from_catalog}.{schema}.{table}
                         """)
 
+    def delete_from_dlt(
+        self,
+        id_column,
+        ids,
+        source_system,
+        entity,
+        catalog,
+        databricks_token,
+        databricks_host = None,
+    ):
+        xdbutils.pipelines_delete(
+            spark=self.spark,
+            id_column=id_column,
+            ids=ids,
+            source_system=source_system,
+            entity=entity,
+            catalog=catalog,
+            databricks_token=databricks_token,
+            databricks_host=databricks_host,
+        )
+
+
 class Transforms():
     """ Transforms """
 

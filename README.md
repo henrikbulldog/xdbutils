@@ -662,8 +662,55 @@ bronze2silver_job.run()
 )
 ```
 
-## GDPR Right to be Forgotten
+## Delete GDPR Personal Identifiable Information
+You may have to delete Personal Identifiable Information in order to comply with GDPR Right to be Forgotten.
+Be very careful when setting arguments - data cannot be recovered !!!
+
 The XDBUtils DLT Framework supports Solution 3 (a) as described in https://www.databricks.com/blog/handling-right-be-forgotten-gdpr-and-ccpa-using-delta-live-tables-dlt.
+
+Wait patiently when running the notebok:
+- Data is deleted from bronze tables
+- The DLT pipeline is started with selected full refresh for silver and gold tables and this notebook waits for it to complete
+- Tables are checked to see if data has been removed
+
+Call XDButils.delete_from_dlt() with parameters:
+
+|Parameter|Description|
+|-|-|
+|id_column|Column that uniquely identifies rows to be deleted, for example "emp_id"|
+|ids|Comma-separated list of id values, for example "1234,4321"|
+|source_system|Source system or schema, for example "demo"|
+|entity|Entity, for example "employee"|
+|calatog|Unity catalog containing tables|
+|databricks_token|A Databricks access token for [authentication to the Databricks API](https://docs.databricks.com/en/dev-tools/auth.html#databricks-personal-access-token-authentication)|
+|databricks_host|If omitted, the framework will get the host from the calling notebook context|
+
+```
+from xdbutils import XDBUtils
+
+xdbutils = XDBUtils(spark, dbutils)
+
+xdbutils.delete_from_dlt(
+    id_column = dbutils.widgets.get("id_column"),
+    ids = dbutils.widgets.get("ids").split(","),
+    source_system = dbutils.widgets.get("source_system"),
+    source_class = dbutils.widgets.get("source_class"), 
+    catalog = dbutils.widgets.get("catalog"),
+    databricks_token = dbutils.secrets().get(scope="<scope>", key="<key>s"),  
+)
+```
+output:
+```
+delete from testing_dlt.xdemo.bronze_employee where emp_id in ('9999')
+Running pipeline xdemo-employee with full refresh of: gold_employee_by_role, gold_employee_by_function, silver_employee_changes, silver_employee
+xdemo-employee, update_id: 34d94bab-30aa-4f31-a973-780bd62fefff, progress: INITIALIZING
+xdemo-employee, update_id: 34d94bab-30aa-4f31-a973-780bd62fefff, progress: SETTING_UP_TABLES
+xdemo-employee, update_id: 34d94bab-30aa-4f31-a973-780bd62fefff, progress: RUNNING
+xdemo-employee, update_id: 34d94bab-30aa-4f31-a973-780bd62fefff, progress: COMPLETED
+Checking table silver_employee_changes for emp_id in ['9999']
+Checking table silver_employee for emp_id in ['9999']
+Checking table bronze_employee for emp_id in ['9999']
+```
 
 # Using Databricks Connect
 See https://learn.microsoft.com/en-us/azure/databricks/dev-tools/databricks-connect
