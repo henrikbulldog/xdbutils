@@ -1,5 +1,6 @@
 """ Delta Live Tables Pipelines """
 
+import time
 from functools import reduce
 from typing import Callable
 import urllib
