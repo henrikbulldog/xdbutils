@@ -2,7 +2,7 @@
 
 from pyspark.sql import DataFrame
 from xdbutils.datalakehouse import DataLakehouse
-from xdbutils.pipelines import DLTPipeline, _delete
+from xdbutils.pipelines import DLTPipeline, _delete_persons
 from xdbutils.transforms import scd2
 from xdbutils.deprecation import deprecated
 from xdbutils.deprecation import deprecated
@@ -139,7 +139,7 @@ class XDBUtils():
                         from {from_catalog}.{schema}.{table}
                         """)
 
-    def delete_rows_from_dlt(
+    def delete_persons(
         self,
         id_column,
         ids,
@@ -149,7 +149,7 @@ class XDBUtils():
         databricks_token,
         databricks_host = None,
     ):
-        _delete(
+        _delete_persons(
             spark=self.spark,
             id_column=id_column,
             ids=ids,

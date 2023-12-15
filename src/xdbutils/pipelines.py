@@ -319,7 +319,7 @@ def _get_workflow_progress(
 
     return next(iter(updates), None)
 
-def _delete(
+def _delete_persons(
     spark,
     source_system,
     entity,
