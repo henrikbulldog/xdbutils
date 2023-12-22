@@ -519,6 +519,13 @@ class DLTPipeline():
         )
         assert update_id, f"Pipeline {self.source_system}-{self.entity}: latest update not found"
 
+        self.__stop(pipeline_id=pipeline_id)
+
+        save_continuous_workflow = self.continuous_workflow
+        if self.continuous_workflow:
+            self.continuous_workflow = False
+            self.create_or_update()
+
         datasets = self.__get_datasets(
             pipeline_id=pipeline_id,
             update_id=update_id,
@@ -537,12 +544,6 @@ class DLTPipeline():
             print(statement)
             self.spark.sql(statement)
         
-        save_continuous_workflow = self.continuous_workflow
-        if self.continuous_workflow:
-            self.__stop(pipeline_id=pipeline_id)
-            self.continuous_workflow = False
-            self.create_or_update()
-
         print(f"Running pipeline {self.source_system}-{self.entity} with full refresh of: {', '.join(non_bronze_tables)}")
         self.__refresh(
             pipeline_id=pipeline_id,
