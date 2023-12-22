@@ -543,7 +543,7 @@ class DLTPipeline():
 
         for bronze_table in bronze_tables:
             ids_string = ",".join([f"'{id}'" for id in ids])
-            statement = f"delete from {self.catalog}.{self.source_system}.{bronze_table} where {id_column} in ({ids_string})"
+            statement = f"delete from {self.catalog}.{self.source_system}.{bronze_table} where `{id_column}` in ({ids_string})"
             print(statement)
             self.spark.sql(statement)
         
