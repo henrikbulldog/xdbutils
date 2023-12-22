@@ -626,7 +626,7 @@ class DLTPipeline():
             print(f"{self.source_system}-{self.entity}, update_id: {update_id}, progress: {progress}")
             if progress:
                 assert progress.lower() != "failed", f"Pipeline {self.source_system}-{self.entity}: update failed"
-                if progress.lower() in ["completed", "canceled"]:
+                if progress.lower() in ["completed", "canceled", "running"]:
                     break
 
     def __get_id(
