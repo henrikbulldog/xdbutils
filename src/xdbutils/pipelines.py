@@ -511,9 +511,6 @@ class DLTPipeline():
         id_column,
         ids,
     ):
-        if not databricks_host:
-            databricks_host = self.spark.conf.get("spark.databricks.workspaceUrl")
-
         pipeline_id = self.__get_id()
         assert pipeline_id, f"Pipeline {self.source_system}-{self.entity} not found"
 
