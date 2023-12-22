@@ -825,7 +825,7 @@ class DLTPipeline():
 
         payload = response.json()
 
-        if not payload.has_key("events"):
+        if not "events" in payload:
             return None
 
         updates = [
