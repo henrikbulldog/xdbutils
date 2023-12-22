@@ -80,7 +80,7 @@ class DLTPipeline():
         self.tags["Entity"] = self.entity
 
         if create_or_update:
-            self.manage.create_or_update()
+            self.create_or_update()
 
     def raw_to_bronze(
         self,
