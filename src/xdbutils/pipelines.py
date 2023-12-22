@@ -523,8 +523,10 @@ class DLTPipeline():
 
         save_continuous_workflow = self.continuous_workflow
         if self.continuous_workflow:
+            print(f"Stopping pipeline {self.source_system}-{self.entity} and setting pipeline mode to triggered instead of continuous")
             self.continuous_workflow = False
             self.create_or_update()
+            self.__wait_until_completed(pipeline_id)
 
         datasets = self.__get_datasets(
             pipeline_id=pipeline_id,
@@ -550,24 +552,10 @@ class DLTPipeline():
             full_refresh_selection=non_bronze_tables,
         )
 
-        update_id = self.__get_latest_update(
-            pipeline_id=pipeline_id,
-        )
-        assert update_id, f"Pipeline {self.source_system}-{self.entity}: latest update not found"
-
-        for x in range(60):
-            time.sleep(10)
-            progress = self.__get_progress(
-                pipeline_id=pipeline_id,
-                update_id=update_id,
-            )
-            print(f"{self.source_system}-{self.entity}, update_id: {update_id}, progress: {progress}")
-            if progress:
-                assert progress.lower() != "failed", f"Pipeline {self.source_system}-{self.entity}: update failed"
-                if progress.lower() == "completed":
-                    break
+        self.__wait_until_completed(pipeline_id)
 
         if self.continuous_workflow != save_continuous_workflow:
+            print(f"Updating pipeline {self.source_system}-{self.entity}, setting pipeline mode back to continuous")
             self.continuous_workflow = save_continuous_workflow
             self.create_or_update()
 
@@ -621,6 +609,24 @@ class DLTPipeline():
         source_tables = [dlt.read(t) for t in sources]
         unioned = reduce(lambda x,y: x.unionAll(y), source_tables)
         return unioned
+
+    def __wait_until_completed(self, pipeline_id):
+        update_id = self.__get_latest_update(
+            pipeline_id=pipeline_id,
+        )
+        assert update_id, f"Pipeline {self.source_system}-{self.entity}: latest update not found"
+
+        for x in range(60):
+            time.sleep(10)
+            progress = self.__get_progress(
+                pipeline_id=pipeline_id,
+                update_id=update_id,
+            )
+            print(f"{self.source_system}-{self.entity}, update_id: {update_id}, progress: {progress}")
+            if progress:
+                assert progress.lower() != "failed", f"Pipeline {self.source_system}-{self.entity}: update failed"
+                if progress.lower() == "completed":
+                    break
 
     def __get_id(
         self,
