@@ -549,7 +549,7 @@ class DLTPipeline():
             full_refresh_selection=non_bronze_tables,
         )
 
-        update_id = self._get_latest_update(
+        update_id = self.__get_latest_update(
             pipeline_id=pipeline_id,
         )
         assert update_id, f"Pipeline {self.source_system}-{self.entity}: latest update not found"
