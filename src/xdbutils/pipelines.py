@@ -23,572 +23,6 @@ except ImportError:
             return MagicMock()
     dlt = MockDlt()
 
-def _create_or_update_workflow(
-    spark,
-    dbutils,
-    source_system,
-    entity,
-    catalog,
-    continuous_workflow,
-    databricks_token,
-    databricks_host = None,
-    source_path = None,
-    tags = None
-    ):
-    """ Create Delta Live Tables Workflow """
-
-    if not tags:
-        tags = {}
-
-    try:
-        if not databricks_host:
-            databricks_host = spark.conf.get("spark.databricks.workspaceUrl")
-    except Exception as exc: # pylint: disable=broad-exception-caught
-        print("Could not get databricks host from notebook context,", 
-              "please specify databricks_host.", exc)
-        return
-
-    try:
-        if not source_path:
-            source_path = (
-                dbutils.notebook.entry_point.getDbutils()
-                .notebook().getContext()
-                .notebookPath().get()
-            )
-    except Exception as exc: # pylint: disable=broad-exception-caught
-        print("Could not get source path from notebook context,",
-              "please specify source_path.", exc)
-        return
-
-    try:
-        workflow_settings = _get_workflow_settings(
-            source_system=source_system,
-            entity=entity,
-            catalog=catalog,
-            source_path=source_path,
-            continuous_workflow=continuous_workflow,
-            tags=tags
-            )
-
-        pipeline_id = _get_workflow_id(
-            source_system=source_system,
-            entity=entity,
-            databricks_host=databricks_host,
-            databricks_token=databricks_token
-            )
-
-        if pipeline_id:
-            _update_workflow(
-                pipeline_id=pipeline_id,
-                workflow_settings=workflow_settings,
-                databricks_host=databricks_host,
-                databricks_token=databricks_token
-                )
-        else:
-            _create_workflow(
-                workflow_settings=workflow_settings,
-                databricks_host=databricks_host,
-                databricks_token=databricks_token
-                )
-    except Exception as exc: # pylint: disable=broad-exception-caught
-        # Cannot get information from notebook context, give up
-        print("Could not create DLT workflow.", exc)
-        return
-
-def _get_workflow_settings(
-    source_system,
-    entity,
-    catalog,
-    source_path,
-    continuous_workflow,
-    tags = None
-    ):
-
-    if not tags:
-        tags = {}
-
-    settings = {
-        "name": f"{source_system}-{entity}",
-        "edition": "Advanced",
-        "development": True,
-        "clusters": [
-            {
-            "label": "default",
-            "autoscale": {
-                "min_workers": 1,
-                "max_workers": 2,
-                "mode": "ENHANCED"
-            }
-            }
-        ],
-        "channel": "PREVIEW",
-        "libraries": [
-            {
-            "notebook": {
-                "path": source_path
-            }
-            }
-        ],
-        "catalog": catalog,
-        "target": source_system,
-        "configuration": {
-            "pipelines.enableTrackHistory": "true"
-        },
-        "continuous": continuous_workflow
-    }
-
-    settings["configuration"].update(tags)
-
-    return settings
-
-def _get_workflow_id(
-    source_system,
-    entity,
-    databricks_host,
-    databricks_token
-    ):
-    name = f"{source_system}-{entity}"
-    params = urllib.parse.urlencode(
-        {"filter": f"name LIKE '{name}'"},
-        quote_via=urllib.parse.quote)
-
-    response = requests.get(
-        url=f"https://{databricks_host}/api/2.0/pipelines",
-        params=params,
-        headers={"Authorization": f"Bearer {databricks_token}"},
-        timeout=60
-        )
-
-    if response.status_code == 200:
-        payload = response.json()
-        if "statuses" in payload.keys():
-            if len(payload["statuses"]) == 1:
-                return payload["statuses"][0]["pipeline_id"]
-
-    return None
-
-def _update_workflow(
-    pipeline_id,
-    workflow_settings,
-    databricks_host,
-    databricks_token
-    ):
-
-    response = requests.put(
-        url=f"https://{databricks_host}/api/2.0/pipelines/{pipeline_id}",
-        json=workflow_settings,
-        headers={"Authorization": f"Bearer {databricks_token}"},
-        timeout=60
-        )
-
-    response.raise_for_status()
-
-def _create_workflow(
-    workflow_settings,
-    databricks_host,
-    databricks_token
-    ):
-
-    response = requests.post(
-        url=f"https://{databricks_host}/api/2.0/pipelines",
-        json=workflow_settings,
-        headers={"Authorization": f"Bearer {databricks_token}"},
-        timeout=60
-        )
-
-    response.raise_for_status()
-
-def _get_latest_workflow_update(
-    pipeline_id,
-    databricks_host,
-    databricks_token,
-):
-    params = urllib.parse.urlencode(
-        {
-            "order_by": "timestamp desc",
-            "max_results": 100,
-        },
-        quote_via=urllib.parse.quote,
-    )
-
-    response = requests.get(
-        url=f"https://{databricks_host}/api/2.0/pipelines/{pipeline_id}/events",
-        params=params,
-        headers={"Authorization": f"Bearer {databricks_token}"},
-        timeout=60,
-    )
-
-    payload = response.json()
-
-    updates = [
-        e["origin"]["update_id"]
-        for e in payload["events"]
-        if e["event_type"] == "create_update"
-    ]
-
-    if not updates:
-        return None
-
-    return next(iter(updates), None)
-
-def _get_workflow_datasets(
-    pipeline_id,
-    update_id,
-    databricks_host,
-    databricks_token,
-):
-    params = urllib.parse.urlencode(
-        {
-            "order_by": "timestamp desc",
-            "max_results": 100,
-        },
-        quote_via=urllib.parse.quote,
-    )
-
-    response = requests.get(
-        url=f"https://{databricks_host}/api/2.0/pipelines/{pipeline_id}/events",
-        params=params,
-        headers={"Authorization": f"Bearer {databricks_token}"},
-        timeout=60,
-    )
-
-    payload = response.json()
-
-    return [
-        e["details"]["flow_definition"]["output_dataset"]
-        for e in payload["events"]
-        if e["event_type"] == "flow_definition"
-        and e["origin"]["update_id"] == update_id
-    ]
-
-def _refresh_workflow(
-    pipeline_id,
-    databricks_host,
-    databricks_token,
-    full_refresh=False,
-    refresh_selection=[],
-    full_refresh_selection=[],
-):
-    refresh_settings = {
-        "full_refresh": full_refresh,
-        "refresh_selection": refresh_selection,
-        "full_refresh_selection": full_refresh_selection,
-    }
-
-    response = requests.post(
-        url=f"https://{databricks_host}/api/2.0/pipelines/{pipeline_id}/updates",
-        json=refresh_settings,
-        headers={"Authorization": f"Bearer {databricks_token}"},
-        timeout=60,
-    )
-
-    response.raise_for_status()
-
-def _get_workflow_progress(
-    pipeline_id,
-    update_id,
-    databricks_host,
-    databricks_token,
-):
-    params = urllib.parse.urlencode(
-        {
-            "order_by": "timestamp desc",
-            "max_results": 100,
-        },
-        quote_via=urllib.parse.quote,
-    )
-
-    response = requests.get(
-        url=f"https://{databricks_host}/api/2.0/pipelines/{pipeline_id}/events",
-        params=params,
-        headers={"Authorization": f"Bearer {databricks_token}"},
-        timeout=60,
-    )
-
-    payload = response.json()
-
-    updates = [
-        e["details"]["update_progress"]["state"]
-        for e in payload["events"]
-        if e["event_type"] == "update_progress"
-        and e["origin"]["update_id"] == update_id
-    ]
-
-    if not updates:
-        return None
-
-    return next(iter(updates), None)
-
-def _delete_persons(
-    spark,
-    source_system,
-    entity,
-    id_column,
-    ids,
-    catalog,
-    databricks_token,
-    databricks_host = None,
-):
-    if not databricks_host:
-        databricks_host = spark.conf.get("spark.databricks.workspaceUrl")
-
-    pipeline_id = _get_workflow_id(
-        source_system=source_system,
-        entity=entity,
-        databricks_host=databricks_host,
-        databricks_token=databricks_token,
-    )
-    assert pipeline_id, f"Pipeline {source_system}-{entity} not found"
-
-    update_id = _get_latest_workflow_update(
-        pipeline_id=pipeline_id,
-        databricks_host=databricks_host,
-        databricks_token=databricks_token,
-    )
-    assert update_id, f"Pipeline {source_system}-{entity}: latest update not found"
-
-    datasets = _get_workflow_datasets(
-        pipeline_id=pipeline_id,
-        update_id=update_id,
-        databricks_host=databricks_host,
-        databricks_token=databricks_token,
-    )
-    assert datasets, f"Pipeline {source_system}-{entity}: cannot find datasets"
-    bronze_tables = [d for d in list(datasets) if d.startswith("bronze_")]
-    non_bronze_tables = [
-        d
-        for d in list(datasets)
-        if not d.startswith("bronze_") and not d.startswith("view_")
-    ]
-
-    for bronze_table in bronze_tables:
-        ids_string = ",".join([f"'{id}'" for id in ids])
-        statement = f"delete from {catalog}.{source_system}.{bronze_table} where {id_column} in ({ids_string})"
-        print(statement)
-        spark.sql(statement)
-
-    print(f"Running pipeline {source_system}-{entity} with full refresh of: {', '.join(non_bronze_tables)}")
-    _refresh_workflow(
-        pipeline_id=pipeline_id,
-        databricks_host=databricks_host,
-        databricks_token=databricks_token,
-        full_refresh_selection=non_bronze_tables,
-    )
-
-    update_id = _get_latest_workflow_update(
-        pipeline_id=pipeline_id,
-        databricks_host=databricks_host,
-        databricks_token=databricks_token,
-    )
-    assert update_id, f"Pipeline {source_system}-{entity}: latest update not found"
-
-    for x in range(60):
-        time.sleep(10)
-        progress = _get_workflow_progress(
-            pipeline_id=pipeline_id,
-            update_id=update_id,
-            databricks_host=databricks_host,
-            databricks_token=databricks_token,
-        )
-        print(f"{source_system}-{entity}, update_id: {update_id}, progress: {progress}")
-        if progress:
-            assert progress.lower() != "failed", f"Pipeline {source_system}-{entity}: update failed"
-            if progress.lower() == "completed":
-                break
-
-    tables = [d for d in list(datasets) if not d.startswith("view_")]
-    for table in tables:
-        df = spark.sql(f"select * from {catalog}.{source_system}.{table}")
-        if any(column == id_column for column in df.columns):
-            print(f"Checking table {table} for {id_column} in {ids}")
-            assert (
-                df.where(col(id_column).isin(ids)).count() == 0
-            ), f"{table} contains {id_column} in {ids}"
-
-def _union_streams(sources):
-    source_tables = [dlt.read_stream(t) for t in sources]
-    unioned = reduce(lambda x,y: x.unionAll(y), source_tables)
-    return unioned
-
-def _union_tables(sources):
-    source_tables = [dlt.read(t) for t in sources]
-    unioned = reduce(lambda x,y: x.unionAll(y), source_tables)
-    return unioned
-
-def _bronze_to_silver_append(
-    source_entities,
-    target_entity,
-    parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-    partition_cols = None,
-    expectations = None,
-    tags = None,
-    ):
-    """ Bronze to Silver, append-only """
-
-    if not partition_cols:
-        partition_cols = []
-
-    if not tags:
-        tags = {}
-
-    if not expectations:
-        expectations = {}
-
-    @dlt.table(
-        comment=", ".join([f"{e}: {tags[e]}" for e in tags.keys()]),
-        name=f"silver_{target_entity}",
-        table_properties={
-            "quality": "silver"
-        },
-        partition_cols=partition_cols,
-    )
-    @dlt.expect_all(expectations)
-    def dlt_table():
-
-        silver_df = (
-            _union_streams([f"bronze_{t}" for t in source_entities])
-            .transform(parse)
-            .where(col("_quarantined") == lit(False))
-            .drop("_quarantined")
-        )
-
-        if "_rescued_data" in silver_df.schema.fieldNames():
-            silver_df = silver_df.drop("_rescued_data")
-
-        return silver_df
-
-def _bronze_to_silver_upsert(
-    source_entities,
-    target_entity,
-    keys,
-    sequence_by,
-    ignore_null_updates = False,
-    apply_as_deletes = None,
-    apply_as_truncates = None,
-    column_list = None,
-    except_column_list = None,
-    parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-    partition_cols = None,
-    expectations = None,
-    tags = None,
-    ):
-    """ Bronze to Silver, upsert """
-
-    if not partition_cols:
-        partition_cols = []
-
-    if not tags:
-        tags = {}
-
-    if not expectations:
-        expectations = {}
-
-    @dlt.view(name=f"view_silver_{target_entity}")
-    @dlt.expect_all(expectations)
-    def dlt_view():
-        silver_df = (
-            _union_streams([f"bronze_{t}" for t in source_entities])
-            .transform(parse)
-            .where(col("_quarantined") == lit(False))
-            .drop("_quarantined")
-        )
-
-        if "_rescued_data" in silver_df.schema.fieldNames():
-            silver_df = silver_df.drop("_rescued_data")
-
-        return silver_df
-
-    dlt.create_streaming_table(
-        name=f"silver_{target_entity}",
-        comment=", ".join([f"{e}: {tags[e]}" for e in tags.keys()]),
-        table_properties={
-            "quality": "bronze"
-        },
-        partition_cols=partition_cols,
-        )
-
-    dlt.apply_changes(
-        target=f"silver_{target_entity}",
-        source=f"view_silver_{target_entity}",
-        keys=keys,
-        sequence_by=col(sequence_by),
-        ignore_null_updates=ignore_null_updates,
-        apply_as_deletes=apply_as_deletes,
-        apply_as_truncates=apply_as_truncates,
-        column_list=column_list,
-        except_column_list=except_column_list,
-        )
-
-def _bronze_to_silver_track_changes(
-    source_entities,
-    target_entity,
-    keys,
-    sequence_by,
-    ignore_null_updates = False,
-    apply_as_deletes = None,
-    apply_as_truncates = None,
-    column_list = None,
-    except_column_list = None,
-    track_history_column_list = None,
-    track_history_except_column_list = None,
-    parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-    partition_cols = None,
-    expectations = None,
-    tags = None,
-    ):
-    """ Bronze to Silver, change data capture,
-    see https://docs.databricks.com/en/delta-live-tables/cdc.html """
-
-    if not partition_cols:
-        partition_cols = []
-
-    if not tags:
-        tags = {}
-
-    if not expectations:
-        expectations = {}
-
-    if not track_history_except_column_list:
-        track_history_except_column_list = [sequence_by]
-
-    @dlt.view(name=f"view_silver_{target_entity}_changes")
-    @dlt.expect_all(expectations)
-    def dlt_view():
-        silver_df = (
-            _union_streams([f"bronze_{t}" for t in source_entities])
-            .transform(parse)
-            .where(col("_quarantined") == lit(False))
-            .drop("_quarantined")
-        )
-
-        if "_rescued_data" in silver_df.schema.fieldNames():
-            silver_df = silver_df.drop("_rescued_data")
-
-        return silver_df
-
-    dlt.create_streaming_table(
-        name=f"silver_{target_entity}_changes",
-        comment=", ".join([f"{e}: {tags[e]}" for e in tags.keys()]),
-        table_properties={
-            "quality": "bronze"
-        },
-        partition_cols=partition_cols,
-        )
-
-    dlt.apply_changes(
-        target=f"silver_{target_entity}_changes",
-        source=f"view_silver_{target_entity}_changes",
-        keys=keys,
-        sequence_by=col(sequence_by),
-        stored_as_scd_type="2",
-        ignore_null_updates=ignore_null_updates,
-        apply_as_deletes=apply_as_deletes,
-        apply_as_truncates=apply_as_truncates,
-        column_list=column_list,
-        except_column_list=except_column_list,
-        track_history_column_list=track_history_column_list,
-        track_history_except_column_list=track_history_except_column_list
-        )
 
 class DLTPipeline():
     """ Delta Live Tables Pipeline """
@@ -605,32 +39,48 @@ class DLTPipeline():
         databricks_token = None,
         databricks_host = None,
         source_path = None,
+        create_or_update = True,
         ):
 
         self.spark = spark
         self.dbutils = dbutils
         self.source_system = source_system
+        self.source_path = source_path
         self.entity = entity
+        self.catalog = catalog
         self.continuous_workflow = continuous_workflow
         self.tags = tags
+        self.databricks_token = databricks_token
+        self.databricks_host = databricks_host
+
+        try:
+            if not self.databricks_host:
+                self.databricks_host = spark.conf.get("spark.databricks.workspaceUrl")
+        except Exception as exc: # pylint: disable=broad-exception-caught
+            print("Could not get databricks host from notebook context,", 
+                "please specify databricks_host.", exc)
+            return
+
+        try:
+            if not self.source_path:
+                self.source_path = (
+                    dbutils.notebook.entry_point.getDbutils()
+                    .notebook().getContext()
+                    .notebookPath().get()
+                )
+        except Exception as exc: # pylint: disable=broad-exception-caught
+            print("Could not get source path from notebook context,",
+                "please specify source_path.", exc)
+            return
+
 
         if not self.tags:
             self.tags = {}
         self.tags["Source system"] = self.source_system
         self.tags["Entity"] = self.entity
 
-        _create_or_update_workflow(
-            spark=self.spark,
-            dbutils=self.dbutils,
-            source_system=self.source_system,
-            entity=self.entity,
-            catalog=catalog,
-            continuous_workflow=self.continuous_workflow,
-            databricks_token=databricks_token,
-            databricks_host=databricks_host,
-            source_path=source_path,
-            tags=self.tags
-            )
+        if create_or_update:
+            self.manage.create_or_update()
 
     def raw_to_bronze(
         self,
@@ -774,14 +224,34 @@ class DLTPipeline():
         if not target_entity:
             target_entity = self.entity
 
-        _bronze_to_silver_append(
-            source_entities=source_entities,
-            target_entity=target_entity,
-            parse=parse,
+        if not partition_cols:
+            partition_cols = []
+
+        if not expectations:
+            expectations = {}
+
+        @dlt.table(
+            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
+            name=f"silver_{target_entity}",
+            table_properties={
+                "quality": "silver"
+            },
             partition_cols=partition_cols,
-            expectations=expectations,
-            tags=self.tags,
         )
+        @dlt.expect_all(expectations)
+        def dlt_table():
+
+            silver_df = (
+                self.__union_streams([f"bronze_{t}" for t in source_entities])
+                .transform(parse)
+                .where(col("_quarantined") == lit(False))
+                .drop("_quarantined")
+            )
+
+            if "_rescued_data" in silver_df.schema.fieldNames():
+                silver_df = silver_df.drop("_rescued_data")
+
+            return silver_df
 
     def bronze_to_silver_upsert(
         self,
@@ -807,21 +277,47 @@ class DLTPipeline():
         if not target_entity:
             target_entity = self.entity
 
-        _bronze_to_silver_upsert(
-            source_entities=source_entities,
-            target_entity=target_entity,
+        if not partition_cols:
+            partition_cols = []
+
+        if not expectations:
+            expectations = {}
+
+        @dlt.view(name=f"view_silver_{target_entity}")
+        @dlt.expect_all(expectations)
+        def dlt_view():
+            silver_df = (
+                self.__union_streams([f"bronze_{t}" for t in source_entities])
+                .transform(parse)
+                .where(col("_quarantined") == lit(False))
+                .drop("_quarantined")
+            )
+
+            if "_rescued_data" in silver_df.schema.fieldNames():
+                silver_df = silver_df.drop("_rescued_data")
+
+            return silver_df
+        
+        dlt.create_streaming_table(
+            name=f"silver_{target_entity}",
+            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
+            table_properties={
+                "quality": "bronze"
+            },
+            partition_cols=partition_cols,
+            )
+
+        dlt.apply_changes(
+            target=f"silver_{target_entity}",
+            source=f"view_silver_{target_entity}",
             keys=keys,
-            sequence_by=sequence_by,
+            sequence_by=col(sequence_by),
             ignore_null_updates=ignore_null_updates,
             apply_as_deletes=apply_as_deletes,
             apply_as_truncates=apply_as_truncates,
             column_list=column_list,
             except_column_list=except_column_list,
-            parse=parse,
-            partition_cols=partition_cols,
-            expectations=expectations,
-            tags=self.tags,
-        )
+            )
 
     def bronze_to_silver_track_changes(
         self,
@@ -850,23 +346,53 @@ class DLTPipeline():
         if not partition_cols:
             partition_cols = []
 
-        _bronze_to_silver_track_changes(
-            source_entities=source_entities,
-            target_entity=target_entity,
+        if not partition_cols:
+            partition_cols = []
+
+        if not expectations:
+            expectations = {}
+
+        if not track_history_except_column_list:
+            track_history_except_column_list = [sequence_by]
+
+        @dlt.view(name=f"view_silver_{target_entity}_changes")
+        @dlt.expect_all(expectations)
+        def dlt_view():
+            silver_df = (
+                self.__union_streams([f"bronze_{t}" for t in source_entities])
+                .transform(parse)
+                .where(col("_quarantined") == lit(False))
+                .drop("_quarantined")
+            )
+
+            if "_rescued_data" in silver_df.schema.fieldNames():
+                silver_df = silver_df.drop("_rescued_data")
+
+            return silver_df
+
+        dlt.create_streaming_table(
+            name=f"silver_{target_entity}_changes",
+            comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
+            table_properties={
+                "quality": "bronze"
+            },
+            partition_cols=partition_cols,
+            )
+
+        dlt.apply_changes(
+            target=f"silver_{target_entity}_changes",
+            source=f"view_silver_{target_entity}_changes",
             keys=keys,
-            sequence_by=sequence_by,
-            tags=self.tags,
+            sequence_by=col(sequence_by),
+            stored_as_scd_type="2",
             ignore_null_updates=ignore_null_updates,
             apply_as_deletes=apply_as_deletes,
             apply_as_truncates=apply_as_truncates,
             column_list=column_list,
             except_column_list=except_column_list,
             track_history_column_list=track_history_column_list,
-            track_history_except_column_list=track_history_except_column_list,
-            parse=parse,
-            partition_cols=partition_cols,
-            expectations=expectations,
-        )
+            track_history_except_column_list=track_history_except_column_list
+            )
 
     @deprecated
     def bronze_to_silver(
@@ -899,7 +425,7 @@ class DLTPipeline():
             if not sequence_by:
                 raise ValueError("sequence_by must be specified for upserts")
 
-            _bronze_to_silver_upsert(
+            self.bronze_to_silver_upsert(
                 source_entities=source_entities,
                 target_entity=target_entity,
                 keys=keys,
@@ -912,17 +438,15 @@ class DLTPipeline():
                 parse=parse,
                 partition_cols=partition_cols,
                 expectations=expectations,
-                tags=self.tags,
             )
 
         else:
-            _bronze_to_silver_append(
+            self.bronze_to_silver_append(
                 source_entities=source_entities,
                 target_entity=target_entity,
                 parse=parse,
                 partition_cols=partition_cols,
                 expectations=expectations,
-                tags=self.tags,
             )
 
     def silver_to_gold(
@@ -952,6 +476,367 @@ class DLTPipeline():
         @dlt.expect_all(expectations)
         def dlt_table():
             return (
-                _union_tables([f"silver_{t}" for t in source_entities])
+                self.__union_tables([f"silver_{t}" for t in source_entities])
                 .transform(parse)
             )
+
+    def create_or_update(
+        self,
+        ):
+        """ Create Delta Live Tables Workflow """
+
+        try:
+            workflow_settings = self.__compose_settings(
+                continuous_workflow=self.continuous_workflow,
+                )
+
+            pipeline_id = self.__get_id()
+
+            if pipeline_id:
+                self.__update(
+                    pipeline_id=pipeline_id,
+                    workflow_settings=workflow_settings,
+                    )
+            else:
+                self.__create(
+                    workflow_settings=workflow_settings,
+                    )
+        except Exception as exc: # pylint: disable=broad-exception-caught
+            # Cannot get information from notebook context, give up
+            print("Could not create DLT workflow.", exc)
+            return
+
+    def delete_persons(
+        self,
+        id_column,
+        ids,
+    ):
+        if not databricks_host:
+            databricks_host = self.spark.conf.get("spark.databricks.workspaceUrl")
+
+        pipeline_id = self.__get_id()
+        assert pipeline_id, f"Pipeline {self.source_system}-{self.entity} not found"
+
+        update_id = self.__get_latest_update(
+            pipeline_id=pipeline_id,
+        )
+        assert update_id, f"Pipeline {self.source_system}-{self.entity}: latest update not found"
+
+        datasets = self.__get_datasets(
+            pipeline_id=pipeline_id,
+            update_id=update_id,
+        )
+        assert datasets, f"Pipeline {self.source_system}-{self.entity}: cannot find datasets"
+        bronze_tables = [d for d in list(datasets) if d.startswith("bronze_")]
+        non_bronze_tables = [
+            d
+            for d in list(datasets)
+            if not d.startswith("bronze_") and not d.startswith("view_")
+        ]
+
+        for bronze_table in bronze_tables:
+            ids_string = ",".join([f"'{id}'" for id in ids])
+            statement = f"delete from {self.catalog}.{self.source_system}.{bronze_table} where {id_column} in ({ids_string})"
+            print(statement)
+            self.spark.sql(statement)
+        
+        save_continuous_workflow = self.continuous_workflow
+        if self.continuous_workflow:
+            self.__stop(pipeline_id=pipeline_id)
+            self.continuous_workflow = False
+            self.create_or_update()
+
+        print(f"Running pipeline {self.source_system}-{self.entity} with full refresh of: {', '.join(non_bronze_tables)}")
+        self.__refresh(
+            pipeline_id=pipeline_id,
+            full_refresh_selection=non_bronze_tables,
+        )
+
+        update_id = self._get_latest_update(
+            pipeline_id=pipeline_id,
+        )
+        assert update_id, f"Pipeline {self.source_system}-{self.entity}: latest update not found"
+
+        for x in range(60):
+            time.sleep(10)
+            progress = self.__get_progress(
+                pipeline_id=pipeline_id,
+                update_id=update_id,
+            )
+            print(f"{self.source_system}-{self.entity}, update_id: {update_id}, progress: {progress}")
+            if progress:
+                assert progress.lower() != "failed", f"Pipeline {self.source_system}-{self.entity}: update failed"
+                if progress.lower() == "completed":
+                    break
+
+        if self.continuous_workflow != save_continuous_workflow:
+            self.continuous_workflow = save_continuous_workflow
+            self.create_or_update()
+
+        tables = [d for d in list(datasets) if not d.startswith("view_")]
+        for table in tables:
+            df = self.spark.sql(f"select * from {self.catalog}.{self.source_system}.{table}")
+            if any(column == id_column for column in df.columns):
+                print(f"Checking table {table} for {id_column} in {ids}")
+                assert (
+                    df.where(col(id_column).isin(ids)).count() == 0
+                ), f"{table} contains {id_column} in {ids}"
+
+    def expose_tables(self, silver_catalog, gold_catalog):
+        """ Expose DLT silver and gold tables from DLT catalog to other catalogs. """
+
+        schemas = [r[0] for r in (
+                   self.spark.sql(f"show schemas in {self.catalog}")
+                   .select("databaseName"))
+                   .collect()]
+        for schema in schemas:
+            tables = [r[0] for r in (
+                self.spark.sql(f"show tables in {self.catalog}.{schema}")
+                .select("tableName")
+                ).collect()]
+            for table in tables:
+                parts = table.split("_")
+                if len(parts) > 1:
+                    if parts[0] == "silver":
+                        self.spark.sql(f"create schema if not exists {silver_catalog}.{schema}")
+                        self.spark.sql(f"""
+                        create view if not exists {silver_catalog}.{schema}.{table.replace("silver_", "")}
+                        as
+                        select *
+                        from {self.catalog}.{schema}.{table}
+                        """)
+                    if parts[0] == "gold":
+                        self.spark.sql(f"create schema if not exists {gold_catalog}.{schema}")
+                        self.spark.sql(f"""
+                        create view if not exists {silver_catalog}.{schema}.{table.replace("gold_", "")}
+                        as
+                        select *
+                        from {self.catalog}.{schema}.{table}
+                        """)
+
+    def __union_streams(self, sources):
+        source_tables = [dlt.read_stream(t) for t in sources]
+        unioned = reduce(lambda x,y: x.unionAll(y), source_tables)
+        return unioned
+
+    def __union_tables(self, sources):
+        source_tables = [dlt.read(t) for t in sources]
+        unioned = reduce(lambda x,y: x.unionAll(y), source_tables)
+        return unioned
+
+    def __get_id(
+        self,
+        ):
+        name = f"{self.source_system}-{self.entity}"
+        params = urllib.parse.urlencode(
+            {"filter": f"name LIKE '{name}'"},
+            quote_via=urllib.parse.quote)
+
+        response = requests.get(
+            url=f"https://{self.databricks_host}/api/2.0/pipelines",
+            params=params,
+            headers={"Authorization": f"Bearer {self.databricks_token}"},
+            timeout=60
+            )
+
+        if response.status_code == 200:
+            payload = response.json()
+            if "statuses" in payload.keys():
+                if len(payload["statuses"]) == 1:
+                    return payload["statuses"][0]["pipeline_id"]
+
+        return None
+
+    def __compose_settings(
+        self,
+        continuous_workflow,
+        ):
+
+        settings = {
+            "name": f"{self.source_system}-{self.entity}",
+            "edition": "Advanced",
+            "development": True,
+            "clusters": [
+                {
+                "label": "default",
+                "autoscale": {
+                    "min_workers": 1,
+                    "max_workers": 2,
+                    "mode": "ENHANCED"
+                }
+                }
+            ],
+            "channel": "PREVIEW",
+            "libraries": [
+                {
+                "notebook": {
+                    "path": self.source_path
+                }
+                }
+            ],
+            "catalog": self.catalog,
+            "target": self.source_system,
+            "configuration": {
+                "pipelines.enableTrackHistory": "true"
+            },
+            "continuous": continuous_workflow
+        }
+
+        settings["configuration"].update(self.tags)
+
+        return settings
+
+    def __update(
+        self,
+        pipeline_id,
+        workflow_settings,
+        ):
+
+        response = requests.put(
+            url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}",
+            json=workflow_settings,
+            headers={"Authorization": f"Bearer {self.databricks_token}"},
+            timeout=60
+            )
+
+        response.raise_for_status()
+
+    def __create(
+        self,
+        workflow_settings,
+        ):
+
+        response = requests.post(
+            url=f"https://{self.databricks_host}/api/2.0/pipelines",
+            json=workflow_settings,
+            headers={"Authorization": f"Bearer {self.databricks_token}"},
+            timeout=60
+            )
+
+        response.raise_for_status()
+
+    def __get_latest_update(
+        self,
+        pipeline_id,
+    ):
+        params = urllib.parse.urlencode(
+            {
+                "order_by": "timestamp desc",
+                "max_results": 100,
+            },
+            quote_via=urllib.parse.quote,
+        )
+
+        response = requests.get(
+            url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}/events",
+            params=params,
+            headers={"Authorization": f"Bearer {self.databricks_token}"},
+            timeout=60,
+        )
+
+        payload = response.json()
+
+        updates = [
+            e["origin"]["update_id"]
+            for e in payload["events"]
+            if e["event_type"] == "create_update"
+        ]
+
+        if not updates:
+            return None
+
+        return next(iter(updates), None)
+
+    def __get_datasets(
+        self,
+        pipeline_id,
+        update_id,
+    ):
+        params = urllib.parse.urlencode(
+            {
+                "order_by": "timestamp desc",
+                "max_results": 100,
+            },
+            quote_via=urllib.parse.quote,
+        )
+
+        response = requests.get(
+            url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}/events",
+            params=params,
+            headers={"Authorization": f"Bearer {self.databricks_token}"},
+            timeout=60,
+        )
+
+        payload = response.json()
+
+        return [
+            e["details"]["flow_definition"]["output_dataset"]
+            for e in payload["events"]
+            if e["event_type"] == "flow_definition"
+            and e["origin"]["update_id"] == update_id
+        ]
+
+    def __refresh(
+        self,
+        pipeline_id,
+        full_refresh=False,
+        refresh_selection=[],
+        full_refresh_selection=[],
+    ):
+        refresh_settings = {
+            "full_refresh": full_refresh,
+            "refresh_selection": refresh_selection,
+            "full_refresh_selection": full_refresh_selection,
+        }
+
+        response = requests.post(
+            url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}/updates",
+            json=refresh_settings,
+            headers={"Authorization": f"Bearer {self.databricks_token}"},
+            timeout=60,
+        )
+
+        response.raise_for_status()
+
+    def __get_progress(
+        self,
+        pipeline_id,
+        update_id,
+    ):
+        params = urllib.parse.urlencode(
+            {
+                "order_by": "timestamp desc",
+                "max_results": 100,
+            },
+            quote_via=urllib.parse.quote,
+        )
+
+        response = requests.get(
+            url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}/events",
+            params=params,
+            headers={"Authorization": f"Bearer {self.databricks_token}"},
+            timeout=60,
+        )
+
+        payload = response.json()
+
+        updates = [
+            e["details"]["update_progress"]["state"]
+            for e in payload["events"]
+            if e["event_type"] == "update_progress"
+            and e["origin"]["update_id"] == update_id
+        ]
+
+        if not updates:
+            return None
+
+        return next(iter(updates), None)
+
+    def __stop(self, pipeline_id):
+        response = requests.post(
+            url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}/stop",
+            headers={"Authorization": f"Bearer {self.databricks_token}"},
+            timeout=60,
+        )
+
+        response.raise_for_status()

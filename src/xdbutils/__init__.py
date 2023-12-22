@@ -2,7 +2,7 @@
 
 from pyspark.sql import DataFrame
 from xdbutils.datalakehouse import DataLakehouse
-from xdbutils.pipelines import DLTPipeline, _delete_persons
+from xdbutils.pipelines import DLTPipeline
 from xdbutils.transforms import scd2
 from xdbutils.deprecation import deprecated
 from xdbutils.deprecation import deprecated
@@ -40,6 +40,7 @@ class XDBUtils():
         databricks_token = None,
         databricks_host = None,
         source_path = None,
+        create_or_update = True,
         ):
         """ Create a Delta Live Tables Pipeline """
 
@@ -54,6 +55,7 @@ class XDBUtils():
             databricks_token=databricks_token,
             databricks_host=databricks_host,
             source_path=source_path,
+            create_or_update = create_or_update,
             )
 
     @deprecated
@@ -106,60 +108,6 @@ class XDBUtils():
             databricks_host=databricks_host,
             source_path=source_path,
             )
-
-    def expose_dlt_tables(self, from_catalog, silver_catalog, gold_catalog):
-        """ Expose DLT silver and gold tables from DLT catalog to other catalogs. """
-
-        schemas = [r[0] for r in (
-                   self.spark.sql(f"show schemas in {from_catalog}")
-                   .select("databaseName"))
-                   .collect()]
-        for schema in schemas:
-            tables = [r[0] for r in (
-                self.spark.sql(f"show tables in {from_catalog}.{schema}")
-                .select("tableName")
-                ).collect()]
-            for table in tables:
-                parts = table.split("_")
-                if len(parts) > 1:
-                    if parts[0] == "silver":
-                        self.spark.sql(f"create schema if not exists {silver_catalog}.{schema}")
-                        self.spark.sql(f"""
-                        create view if not exists {silver_catalog}.{schema}.{table.replace("silver_", "")}
-                        as
-                        select *
-                        from {from_catalog}.{schema}.{table}
-                        """)
-                    if parts[0] == "gold":
-                        self.spark.sql(f"create schema if not exists {gold_catalog}.{schema}")
-                        self.spark.sql(f"""
-                        create view if not exists {silver_catalog}.{schema}.{table.replace("gold_", "")}
-                        as
-                        select *
-                        from {from_catalog}.{schema}.{table}
-                        """)
-
-    def delete_persons(
-        self,
-        id_column,
-        ids,
-        source_system,
-        entity,
-        catalog,
-        databricks_token,
-        databricks_host = None,
-    ):
-        _delete_persons(
-            spark=self.spark,
-            id_column=id_column,
-            ids=ids,
-            source_system=source_system,
-            entity=entity,
-            catalog=catalog,
-            databricks_token=databricks_token,
-            databricks_host=databricks_host,
-        )
-
 
 class Transforms():
     """ Transforms """
