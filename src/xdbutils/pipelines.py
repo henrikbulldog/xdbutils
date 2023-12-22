@@ -506,6 +506,8 @@ class DLTPipeline():
             print("Could not create DLT workflow.", exc)
             return
 
+        self.__wait_until_completed(pipeline_id)
+
     def delete_persons(
         self,
         id_column,
@@ -526,7 +528,6 @@ class DLTPipeline():
             print(f"Stopping pipeline {self.source_system}-{self.entity} and setting pipeline mode to triggered instead of continuous")
             self.continuous_workflow = False
             self.create_or_update()
-            self.__wait_until_completed(pipeline_id)
 
         datasets = self.__get_datasets(
             pipeline_id=pipeline_id,
