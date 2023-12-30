@@ -609,7 +609,7 @@ class DLTPipeline():
         unioned = reduce(lambda x,y: x.unionAll(y), source_tables)
         return unioned
 
-    def __wait_until_state(self, pipeline_id, states = ["completed", "canceled", "running"]):
+    def __wait_until_state(self, pipeline_id, states):
         update_id = self.__get_latest_update(
             pipeline_id=pipeline_id,
         )
@@ -624,6 +624,8 @@ class DLTPipeline():
             print(f"{self.source_system}-{self.entity}, update_id: {update_id}, progress: {progress}")
             if progress:
                 assert progress.lower() != "failed", f"Pipeline {self.source_system}-{self.entity}: update failed"
+                if progress.lower() == "cancelled":
+                    break
                 if progress.lower() in states:
                     break
 
