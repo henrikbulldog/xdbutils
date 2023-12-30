@@ -553,8 +553,6 @@ class DLTPipeline():
             full_refresh_selection=non_bronze_tables,
         )
 
-        self.__wait_until_state(pipeline_id=pipeline_id, states=["completed"])
-
         if self.continuous_workflow != save_continuous_workflow:
             print(f"Updating pipeline {self.source_system}-{self.entity}, setting pipeline mode back to continuous")
             self.continuous_workflow = save_continuous_workflow
@@ -802,6 +800,8 @@ class DLTPipeline():
         )
 
         response.raise_for_status()
+
+        self.__wait_until_state(pipeline_id=pipeline_id, states=["completed"])
 
     def __get_progress(
         self,
