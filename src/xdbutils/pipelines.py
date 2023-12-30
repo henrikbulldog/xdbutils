@@ -558,7 +558,6 @@ class DLTPipeline():
         if self.continuous_workflow != save_continuous_workflow:
             print(f"Updating pipeline {self.source_system}-{self.entity}, setting pipeline mode back to continuous")
             self.continuous_workflow = save_continuous_workflow
-            self.__refresh(pipeline_id=pipeline_id)
             self.create_or_update()
 
         tables = [d for d in list(datasets) if not d.startswith("view_")]
