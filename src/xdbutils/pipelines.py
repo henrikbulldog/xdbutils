@@ -506,7 +506,7 @@ class DLTPipeline():
             print("Could not create DLT workflow.", exc)
             return
 
-        self.__wait_until_completed(pipeline_id)
+        self.__wait_until_state(pipeline_id=pipeline_id, states=["completed", "running"])
 
     def delete_persons(
         self,
@@ -553,7 +553,7 @@ class DLTPipeline():
             full_refresh_selection=non_bronze_tables,
         )
 
-        self.__wait_until_completed(pipeline_id)
+        self.__wait_until_state(pipeline_id=pipeline_id, states=["completed"])
 
         if self.continuous_workflow != save_continuous_workflow:
             print(f"Updating pipeline {self.source_system}-{self.entity}, setting pipeline mode back to continuous")
@@ -611,7 +611,7 @@ class DLTPipeline():
         unioned = reduce(lambda x,y: x.unionAll(y), source_tables)
         return unioned
 
-    def __wait_until_completed(self, pipeline_id):
+    def __wait_until_state(self, pipeline_id, states = ["completed", "canceled", "running"]):
         update_id = self.__get_latest_update(
             pipeline_id=pipeline_id,
         )
@@ -626,7 +626,7 @@ class DLTPipeline():
             print(f"{self.source_system}-{self.entity}, update_id: {update_id}, progress: {progress}")
             if progress:
                 assert progress.lower() != "failed", f"Pipeline {self.source_system}-{self.entity}: update failed"
-                if progress.lower() in ["completed", "canceled", "running"]:
+                if progress.lower() in states:
                     break
 
     def __get_id(
