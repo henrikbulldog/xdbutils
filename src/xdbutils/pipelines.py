@@ -40,6 +40,7 @@ class DLTPipeline():
         databricks_host = None,
         source_path = None,
         create_or_update = True,
+        print_progress = False,
         ):
 
         self.spark = spark
@@ -52,6 +53,7 @@ class DLTPipeline():
         self.tags = tags
         self.databricks_token = databricks_token
         self.databricks_host = databricks_host
+        self.print_progress = print_progress
 
         try:
             if not self.databricks_host:
@@ -506,7 +508,8 @@ class DLTPipeline():
             print("Could not create DLT workflow.", exc)
             return
 
-        self.__wait_until_state(pipeline_id=pipeline_id, states=["completed", "running"])
+        if self.print_progress:
+            self.__wait_until_state(pipeline_id=pipeline_id, states=["completed", "running"])
 
     def delete_persons(
         self,
