@@ -741,6 +741,9 @@ class DLTPipeline():
 
         payload = response.json()
 
+        if not "events" in payload:
+            return None
+
         updates = [
             e["origin"]["update_id"]
             for e in payload["events"]
