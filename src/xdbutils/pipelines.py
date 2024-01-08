@@ -715,6 +715,7 @@ class DLTPipeline():
         workflow_settings,
         ):
 
+        print(f"Updating pipeline {self.source_system}-{self.source_class}")
         response = requests.put(
             url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}",
             json=workflow_settings,
@@ -729,6 +730,7 @@ class DLTPipeline():
         workflow_settings,
         ):
 
+        print(f"Creating pipeline {self.source_system}-{self.source_class}")
         response = requests.post(
             url=f"https://{self.databricks_host}/api/2.0/pipelines",
             json=workflow_settings,
