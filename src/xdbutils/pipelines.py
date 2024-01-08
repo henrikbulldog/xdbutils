@@ -630,7 +630,7 @@ class DLTPipeline():
             pipeline_id=pipeline_id,
         )
         if not update_id:
-            print(f"Pipeline {self.source_system}-{self.source_class}: latest update not found")
+            print(f"Pipeline {self.source_system}-{self.entity}: latest update not found")
             return
 
         for x in range(60):
@@ -715,7 +715,7 @@ class DLTPipeline():
         workflow_settings,
         ):
 
-        print(f"Updating pipeline {self.source_system}-{self.source_class}")
+        print(f"Updating pipeline {self.source_system}-{self.entity}")
         response = requests.put(
             url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}",
             json=workflow_settings,
@@ -730,7 +730,7 @@ class DLTPipeline():
         workflow_settings,
         ):
 
-        print(f"Creating pipeline {self.source_system}-{self.source_class}")
+        print(f"Creating pipeline {self.source_system}-{self.entity}")
         response = requests.post(
             url=f"https://{self.databricks_host}/api/2.0/pipelines",
             json=workflow_settings,
