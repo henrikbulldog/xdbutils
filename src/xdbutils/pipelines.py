@@ -607,12 +607,7 @@ class DLTPipeline():
 
     def stop(self):
         pipeline_id = self.__get_id()
-        response = requests.post(
-            url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}/stop",
-            headers={"Authorization": f"Bearer {self.databricks_token}"},
-            timeout=60
-            )
-        response.raise_for_status()
+        self.__stop(pipeline_id=pipeline_id)
         self.__wait_until_state(pipeline_id=pipeline_id, states=[])
 
     def __union_streams(self, sources):
