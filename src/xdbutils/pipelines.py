@@ -506,7 +506,8 @@ class DLTPipeline():
             print("Could not create DLT workflow.", exc)
             return
 
-        self.__wait_until_state(pipeline_id=pipeline_id, states=["completed", "running"])
+        if self.continuous_workflow:
+            self.__wait_until_state(pipeline_id=pipeline_id, states=["completed", "running"])
 
     def delete_persons(
         self,
@@ -599,6 +600,21 @@ class DLTPipeline():
                         from {self.catalog}.{schema}.{table}
                         """)
 
+    def start(self):
+        pipeline_id = self.__get_id()
+        self.__refresh(pipeline_id=pipeline_id)
+        self.__wait_until_state(pipeline_id=pipeline_id, states=["completed", "running"])
+
+    def stop(self):
+        pipeline_id = self.__get_id()
+        response = requests.post(
+            url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}/stop",
+            headers={"Authorization": f"Bearer {self.databricks_token}"},
+            timeout=60
+            )
+        response.raise_for_status()
+        self.__wait_until_state(pipeline_id=pipeline_id, states=[])
+
     def __union_streams(self, sources):
         source_tables = [dlt.read_stream(t) for t in sources]
         unioned = reduce(lambda x,y: x.unionAll(y), source_tables)
@@ -613,7 +629,9 @@ class DLTPipeline():
         update_id = self.__get_latest_update(
             pipeline_id=pipeline_id,
         )
-        assert update_id, f"Pipeline {self.source_system}-{self.entity}: latest update not found"
+        if not update_id:
+            print(f"Pipeline {self.source_system}-{self.source_class}: latest update not found")
+            return
 
         for x in range(60):
             time.sleep(10)
