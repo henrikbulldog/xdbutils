@@ -12,7 +12,7 @@ from xdbutils.deprecation import deprecated
 
 try:
     import dlt  # type: ignore
-except ImportError:
+except: # pylint: disable=bare-except
     from unittest.mock import MagicMock
     class MockDlt:
         """ Mock dlt module, only works in Databricks notebooks """
