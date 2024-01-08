@@ -493,11 +493,13 @@ class DLTPipeline():
             pipeline_id = self.__get_id()
 
             if pipeline_id:
+                print(f"Updating pipeline {self.source_system}-{self.entity}")
                 self.__update(
                     pipeline_id=pipeline_id,
                     workflow_settings=workflow_settings,
                     )
             else:
+                print(f"Creating pipeline {self.source_system}-{self.entity}")
                 self.__create(
                     workflow_settings=workflow_settings,
                     )
@@ -601,11 +603,17 @@ class DLTPipeline():
                         """)
 
     def start(self):
+        print(f"Starting pipeline {self.source_system}-{self.entity}")
         pipeline_id = self.__get_id()
         self.__refresh(pipeline_id=pipeline_id)
-        self.__wait_until_state(pipeline_id=pipeline_id, states=["completed", "running"])
+        if self.continuous_workflow:
+            states = ["running"]
+        else:
+            states = ["completed"]
+        self.__wait_until_state(pipeline_id=pipeline_id, states=states)
 
     def stop(self):
+        print(f"Stopping pipeline {self.source_system}-{self.entity}")
         pipeline_id = self.__get_id()
         self.__stop(pipeline_id=pipeline_id)
         self.__wait_until_state(pipeline_id=pipeline_id, states=[])
@@ -710,7 +718,6 @@ class DLTPipeline():
         workflow_settings,
         ):
 
-        print(f"Updating pipeline {self.source_system}-{self.entity}")
         response = requests.put(
             url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}",
             json=workflow_settings,
@@ -725,7 +732,6 @@ class DLTPipeline():
         workflow_settings,
         ):
 
-        print(f"Creating pipeline {self.source_system}-{self.entity}")
         response = requests.post(
             url=f"https://{self.databricks_host}/api/2.0/pipelines",
             json=workflow_settings,
