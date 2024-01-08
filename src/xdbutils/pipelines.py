@@ -508,9 +508,6 @@ class DLTPipeline():
             print("Could not create DLT workflow.", exc)
             return
 
-        if self.continuous_workflow:
-            self.__wait_until_state(pipeline_id=pipeline_id, states=["completed", "running"])
-
     def delete_persons(
         self,
         id_column,
@@ -606,17 +603,11 @@ class DLTPipeline():
         print(f"Starting pipeline {self.source_system}-{self.entity}")
         pipeline_id = self.__get_id()
         self.__refresh(pipeline_id=pipeline_id)
-        if self.continuous_workflow:
-            states = ["running"]
-        else:
-            states = ["completed"]
-        self.__wait_until_state(pipeline_id=pipeline_id, states=states)
 
     def stop(self):
         print(f"Stopping pipeline {self.source_system}-{self.entity}")
         pipeline_id = self.__get_id()
         self.__stop(pipeline_id=pipeline_id)
-        self.__wait_until_state(pipeline_id=pipeline_id, states=[])
 
     def __union_streams(self, sources):
         source_tables = [dlt.read_stream(t) for t in sources]
@@ -727,6 +718,9 @@ class DLTPipeline():
 
         response.raise_for_status()
 
+        if self.continuous_workflow:
+            self.__wait_until_state(pipeline_id=pipeline_id, states=["running"])
+
     def __create(
         self,
         workflow_settings,
@@ -740,6 +734,9 @@ class DLTPipeline():
             )
 
         response.raise_for_status()
+
+        if self.continuous_workflow:
+            self.__wait_until_state(pipeline_id=self.__get_id(), states=["running"])
 
     def __get_latest_update(
         self,
@@ -827,7 +824,11 @@ class DLTPipeline():
 
         response.raise_for_status()
 
-        self.__wait_until_state(pipeline_id=pipeline_id, states=["completed"])
+        if self.continuous_workflow:
+            states = ["running"]
+        else:
+            states = ["completed"]
+        self.__wait_until_state(pipeline_id=pipeline_id, states=states)
 
     def __get_progress(
         self,
@@ -874,3 +875,5 @@ class DLTPipeline():
         )
 
         response.raise_for_status()
+
+        self.__wait_until_state(pipeline_id=pipeline_id, states=[])
