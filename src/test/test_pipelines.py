@@ -78,9 +78,7 @@ class PipelinesTestCase(unittest.TestCase):
             eventhub_namespace="ns",
             eventhub_group_id="gr",
             eventhub_name="name",
-            client_id="client id",
-            client_secret="client secret",
-            azure_tenant_id="azure_tenant_id",
+            eventhub_connection_string="conn str"
             )
 
         pipeline.bronze_to_silver()

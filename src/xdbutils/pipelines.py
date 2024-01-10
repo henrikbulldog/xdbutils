@@ -144,9 +144,7 @@ class DLTPipeline():
         eventhub_namespace,
         eventhub_group_id,
         eventhub_name,
-        client_id,
-        client_secret,
-        azure_tenant_id,
+        eventhub_connection_string,
         starting_offsets = None,
         target_entity = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
@@ -171,15 +169,16 @@ class DLTPipeline():
             "kafka.bootstrap.servers"  : f"{eventhub_namespace}.servicebus.windows.net:9093",
             "subscribe"                : eventhub_name,
             "kafka.group.id"           : eventhub_group_id,
-            "kafka.sasl.jaas.config"   : f'kafkashaded.org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId="{client_id}" clientSecret="{client_secret}" scope="https://{eventhub_namespace}.servicebus.windows.net/.default" ssl.protocol="SSL";',
-            "kafka.sasl.mechanism"     : "OAUTHBEARER",
+            "kafka.sasl.mechanism"     : "PLAIN",
             "kafka.security.protocol"  : "SASL_SSL",
-            "kafka.sasl.login.callback.handler.class": "kafkashaded.org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler",
-            "kafka.sasl.oauthbearer.token.endpoint.url": f"https://login.microsoft.com/{azure_tenant_id}/oauth2/v2.0/token",
+            "kafka.sasl.jaas.config"   : 
+                "kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule" +
+                " required username=\"$ConnectionString\"" +
+                f" password=\"{eventhub_connection_string}\";",
             "kafka.request.timeout.ms" : "6000",
             "kafka.session.timeout.ms" : "6000",
             "maxOffsetsPerTrigger"     : "600",
-            "failOnDataLoss"           : "false",
+            "failOnDataLoss"           : 'true',
             "startingOffsets"          : starting_offsets,
         }
 
