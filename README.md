@@ -12,11 +12,12 @@ Table of contents:
   * [File-based batch ingestion](#file-based-batch-ingestion)
     + [Create Test Data](#create-test-data)
     + [Raw to Bronze](#raw-to-bronze)
-    + [Bronze to Silver](#bronze-to-silver)
+    + [Bronze to Silver with Upsert](#bronze-to-silver-with-upsert)
+    + [Bronze to Silver with Change Tracking](#bronze-to-silver-with-change-tracking)
     + [Silver to Gold](#silver-to-gold)
   * [Event-Based Ingestion](#event-based-ingestion)
     + [Event to Bronze](#event-to-bronze)
-    + [Bronze to Silver](#bronze-to-silver-1)
+    + [Bronze to Silver with Append Only](#bronze-to-silver-with-append-only)
 - [Using the Data Lakehouse Framework (straight up python)](#using-the-data-lakehouse-framework)
     + [Create Test Data](#create-test-data-1)
     + [Raw to Bronze](#raw-to-bronze-1)
@@ -255,8 +256,8 @@ Bronze metadata columns:
 |_ingest_time|Time of ingestion|
 |_quarantined|False if expectations are met, True if not|
 
-### Bronze to Silver
-Call bronze_to_silver() with parameters (see also [DLT docs](https://docs.databricks.com/en/delta-live-tables/python-ref.html#change-data-capture-with-python-in-delta-live-tables)):
+### Bronze to Silver with Upsert
+Call bronze_to_silver_upsert() with parameters (see also [DLT docs](https://docs.databricks.com/en/delta-live-tables/python-ref.html#change-data-capture-with-python-in-delta-live-tables)):
 
 |Parameter|Description|
 |---------|-----------|
@@ -510,8 +511,8 @@ Bronze metadata columns:
 |_ingest_time|Time of ingestion|
 |_quarantined|False if expectations are met, True if not|
 
-### Bronze to Silver
-Call bronze_to_silver() with parameters (see also [DLT docs](https://docs.databricks.com/en/delta-live-tables/python-ref.html#change-data-capture-with-python-in-delta-live-tables)):
+### Bronze to Silver with Append Only
+Call bronze_to_silver_append() with parameters:
 
 |Parameter|Description|
 |---------|-----------|
@@ -541,7 +542,7 @@ json_schema = StructType([
     StructField("diagnostics", StringType()),
     ])
 
-pipeline.bronze_to_silver(
+pipeline.bronze_to_silver_append(
   parse=lambda df: (
     df
     .select(from_json(col("value").cast(StringType()), json_schema).alias("payload"))
