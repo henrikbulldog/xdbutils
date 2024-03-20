@@ -57,7 +57,7 @@ class DLTPipeline():
             if not self.databricks_host:
                 self.databricks_host = spark.conf.get("spark.databricks.workspaceUrl")
         except Exception as exc: # pylint: disable=broad-exception-caught
-            print("Could not get databricks host from notebook context,", 
+            print("Could not get databricks host from Spark configuration,", 
                 "please specify databricks_host.", exc)
             return
 
@@ -229,6 +229,9 @@ class DLTPipeline():
 
         if not expectations:
             expectations = {}
+            quarantine_rules = None
+        else:
+            quarantine_rules = f'NOT(({") AND (".join(expectations.values())}))'
 
         @dlt.table(
             comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
@@ -238,15 +241,18 @@ class DLTPipeline():
             },
             partition_cols=partition_cols,
         )
-        @dlt.expect_all(expectations)
         def dlt_table():
 
             silver_df = (
                 self.__union_streams([f"bronze_{t}" for t in source_entities])
-                .transform(parse)
                 .where(col("_quarantined") == lit(False))
                 .drop("_quarantined")
+                .transform(parse)
+                .withColumn("_quarantined", lit(False))
             )
+
+            if quarantine_rules:
+                silver_df = silver_df.withColumn("_quarantined", expr(quarantine_rules))
 
             if "_rescued_data" in silver_df.schema.fieldNames():
                 silver_df = silver_df.drop("_rescued_data")
@@ -282,16 +288,22 @@ class DLTPipeline():
 
         if not expectations:
             expectations = {}
+            quarantine_rules = None
+        else:
+            quarantine_rules = f'NOT(({") AND (".join(expectations.values())}))'
 
         @dlt.view(name=f"view_silver_{target_entity}")
-        @dlt.expect_all(expectations)
         def dlt_view():
             silver_df = (
                 self.__union_streams([f"bronze_{t}" for t in source_entities])
-                .transform(parse)
                 .where(col("_quarantined") == lit(False))
                 .drop("_quarantined")
+                .transform(parse)
+                .withColumn("_quarantined", lit(False))
             )
+
+            if quarantine_rules:
+                silver_df = silver_df.withColumn("_quarantined", expr(quarantine_rules))
 
             if "_rescued_data" in silver_df.schema.fieldNames():
                 silver_df = silver_df.drop("_rescued_data")
@@ -351,19 +363,25 @@ class DLTPipeline():
 
         if not expectations:
             expectations = {}
+            quarantine_rules = None
+        else:
+            quarantine_rules = f'NOT(({") AND (".join(expectations.values())}))'
 
         if not track_history_except_column_list:
             track_history_except_column_list = [sequence_by]
 
         @dlt.view(name=f"view_silver_{target_entity}_changes")
-        @dlt.expect_all(expectations)
         def dlt_view():
             silver_df = (
                 self.__union_streams([f"bronze_{t}" for t in source_entities])
-                .transform(parse)
                 .where(col("_quarantined") == lit(False))
                 .drop("_quarantined")
+                .transform(parse)
+                .withColumn("_quarantined", lit(False))
             )
+
+            if quarantine_rules:
+                silver_df = silver_df.withColumn("_quarantined", expr(quarantine_rules))
 
             if "_rescued_data" in silver_df.schema.fieldNames():
                 silver_df = silver_df.drop("_rescued_data")
@@ -394,61 +412,6 @@ class DLTPipeline():
             track_history_except_column_list=track_history_except_column_list
             )
 
-    @deprecated
-    def bronze_to_silver(
-        self,
-        source_entities = None,
-        target_entity = None,
-        keys = None,
-        sequence_by = None,
-        ignore_null_updates = False,
-        apply_as_deletes = None,
-        apply_as_truncates = None,
-        column_list = None,
-        except_column_list = None,
-        parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-        partition_cols = None,
-        expectations = None,
-        ):
-        """ Bronze to Silver, append (if no keys) or upsert
-        (if keys and sequence_by is specified) """
-
-        if not partition_cols:
-            partition_cols = []
-        if not source_entities:
-            source_entities = [self.entity]
-        if not target_entity:
-            target_entity = self.entity
-
-        if keys and len(keys) > 0:
-
-            if not sequence_by:
-                raise ValueError("sequence_by must be specified for upserts")
-
-            self.bronze_to_silver_upsert(
-                source_entities=source_entities,
-                target_entity=target_entity,
-                keys=keys,
-                sequence_by=sequence_by,
-                ignore_null_updates=ignore_null_updates,
-                apply_as_deletes=apply_as_deletes,
-                apply_as_truncates=apply_as_truncates,
-                column_list=column_list,
-                except_column_list=except_column_list,
-                parse=parse,
-                partition_cols=partition_cols,
-                expectations=expectations,
-            )
-
-        else:
-            self.bronze_to_silver_append(
-                source_entities=source_entities,
-                target_entity=target_entity,
-                parse=parse,
-                partition_cols=partition_cols,
-                expectations=expectations,
-            )
-
     def silver_to_gold(
         self,
         name,
@@ -473,7 +436,7 @@ class DLTPipeline():
                 "quality": "gold"
             },
         )
-        @dlt.expect_all(expectations)
+        @dlt.expect_all_or_fail(expectations)
         def dlt_table():
             return (
                 self.__union_tables([f"silver_{t}" for t in source_entities])

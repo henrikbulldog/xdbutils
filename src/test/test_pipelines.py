@@ -36,8 +36,6 @@ class PipelinesTestCase(unittest.TestCase):
             raw_format="json"
             )
 
-        pipeline.bronze_to_silver()
-
         pipeline.bronze_to_silver_append()
 
         pipeline.bronze_to_silver_upsert(
@@ -80,8 +78,6 @@ class PipelinesTestCase(unittest.TestCase):
             eventhub_name="name",
             eventhub_connection_string="conn str"
             )
-
-        pipeline.bronze_to_silver()
 
         pipeline.bronze_to_silver_append()
 
