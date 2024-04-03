@@ -128,7 +128,7 @@ class DLTPipeline():
             reader.option("cloudFiles.format", raw_format)
             if "json" in raw_format.lower():
                 reader.option("cloudFiles.schemaLocation",
-                    f"{self.raw_base_path}/checkpoints/{self.source_system}/{source_entity}")
+                    f"{raw_base_path}/checkpoints/{self.source_system}/{source_entity}")
                 reader.option("cloudFiles.inferColumnTypes", "true")
             if schema:
                 reader.schema(schema)
@@ -137,7 +137,7 @@ class DLTPipeline():
 
             result_df = (
                 reader
-                .load(f"{self.raw_base_path}/{self.source_system}/{source_entity}")
+                .load(f"{raw_base_path}/{self.source_system}/{source_entity}")
                 .transform(parse)
                 .withColumn("_ingest_time", current_timestamp())
             )
