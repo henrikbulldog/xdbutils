@@ -89,6 +89,7 @@ class DLTPipeline():
         source_entity = None,
         target_entity = None,
         options = None,
+        schema = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         partition_cols = None,
         expectations = None,
@@ -119,19 +120,26 @@ class DLTPipeline():
             partition_cols=partition_cols,
         )
         def dlt_table():
-            result_df = ( self.spark.readStream.format("cloudFiles")
+            reader = (
+                self.spark.readStream
+                .format("cloudFiles")
                 .options(**options)
-                .option("cloudFiles.format", raw_format)
-                .option("cloudFiles.inferColumnTypes", "true")
-                .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
-                .option(
-                    "cloudFiles.schemaLocation",
-                    f"{raw_base_path}/checkpoints/{self.source_system}/{source_entity}"
-                    )
-                .load(f"{raw_base_path}/{self.source_system}/{source_entity}")
+            )
+            reader.option("cloudFiles.format", raw_format)
+            if "json" in raw_format.lower():
+                reader.option("cloudFiles.schemaLocation",
+                    f"{self.raw_base_path}/checkpoints/{self.source_system}/{source_entity}")
+                reader.option("cloudFiles.inferColumnTypes", "true")
+            if schema:
+                reader.schema(schema)
+            else:
+                reader.option("cloudFiles.schemaEvolutionMode", "addNewColumns")
+
+            result_df = (
+                reader
+                .load(f"{self.raw_base_path}/{self.source_system}/{source_entity}")
                 .transform(parse)
                 .withColumn("_ingest_time", current_timestamp())
-                .withColumn("_quarantined", lit(False))
             )
 
             if quarantine_rules:
