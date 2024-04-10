@@ -9,10 +9,10 @@ class DLTPipelineDataManager(DLTPipelineManager):
         id_column,
         ids,
     ):
-        pipeline_id = self.get_id()
+        pipeline_id = self._get_id()
         assert pipeline_id, f"Pipeline {self.source_system}-{self.entity} not found"
 
-        update_id = self.__get_latest_update(
+        update_id = self._get_latest_update(
             pipeline_id=pipeline_id,
         )
         assert update_id, f"Pipeline {self.source_system}-{self.entity}: latest update not found"
@@ -24,7 +24,7 @@ class DLTPipelineDataManager(DLTPipelineManager):
             self.continuous_workflow = False
             self.create_or_update()
 
-        datasets = self.__get_datasets(
+        datasets = self._get_datasets(
             pipeline_id=pipeline_id,
             update_id=update_id,
         )

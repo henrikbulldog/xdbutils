@@ -70,7 +70,7 @@ class DLTPipelineManager():
                 continuous_workflow=self.continuous_workflow,
                 )
 
-            pipeline_id = self.get_id()
+            pipeline_id = self._get_id()
 
             if pipeline_id:
                 print(f"Updating pipeline {self.source_system}-{self.entity}")
@@ -88,7 +88,17 @@ class DLTPipelineManager():
             print("Could not create DLT workflow.", exc)
             return
 
-    def get_id(
+    def start(self):
+        print(f"Starting pipeline {self.source_system}-{self.entity}")
+        pipeline_id = self._get_id()
+        self.__refresh(pipeline_id=pipeline_id)
+
+    def stop(self):
+        print(f"Stopping pipeline {self.source_system}-{self.entity}")
+        pipeline_id = self._get_id()
+        self.__stop(pipeline_id=pipeline_id)
+
+    def _get_id(
         self,
         ):
         name = f"{self.source_system}-{self.entity}"
@@ -111,18 +121,72 @@ class DLTPipelineManager():
 
         return None
 
-    def start(self):
-        print(f"Starting pipeline {self.source_system}-{self.entity}")
-        pipeline_id = self.get_id()
-        self.__refresh(pipeline_id=pipeline_id)
+    def _get_latest_update(
+        self,
+        pipeline_id,
+    ):
+        params = urllib.parse.urlencode(
+            {
+                "order_by": "timestamp desc",
+                "max_results": 100,
+            },
+            quote_via=urllib.parse.quote,
+        )
 
-    def stop(self):
-        print(f"Stopping pipeline {self.source_system}-{self.entity}")
-        pipeline_id = self.get_id()
-        self.__stop(pipeline_id=pipeline_id)
+        response = requests.get(
+            url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}/events",
+            params=params,
+            headers={"Authorization": f"Bearer {self.databricks_token}"},
+            timeout=60,
+        )
+
+        payload = response.json()
+
+        if not "events" in payload:
+            return None
+
+        updates = [
+            e["origin"]["update_id"]
+            for e in payload["events"]
+            if e["event_type"] == "create_update"
+        ]
+
+        if not updates:
+            return None
+
+        return next(iter(updates), None)
+
+    def _get_datasets(
+        self,
+        pipeline_id,
+        update_id,
+    ):
+        params = urllib.parse.urlencode(
+            {
+                "order_by": "timestamp desc",
+                "max_results": 100,
+            },
+            quote_via=urllib.parse.quote,
+        )
+
+        response = requests.get(
+            url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}/events",
+            params=params,
+            headers={"Authorization": f"Bearer {self.databricks_token}"},
+            timeout=60,
+        )
+
+        payload = response.json()
+
+        return [
+            e["details"]["flow_definition"]["output_dataset"]
+            for e in payload["events"]
+            if e["event_type"] == "flow_definition"
+            and e["origin"]["update_id"] == update_id
+        ]
 
     def __wait_until_state(self, pipeline_id, states):
-        update_id = self.__get_latest_update(
+        update_id = self._get_latest_update(
             pipeline_id=pipeline_id,
         )
         if not update_id:
@@ -215,71 +279,7 @@ class DLTPipelineManager():
         response.raise_for_status()
 
         if self.continuous_workflow:
-            self.__wait_until_state(pipeline_id=self.get_id(), states=["running"])
-
-    def __get_latest_update(
-        self,
-        pipeline_id,
-    ):
-        params = urllib.parse.urlencode(
-            {
-                "order_by": "timestamp desc",
-                "max_results": 100,
-            },
-            quote_via=urllib.parse.quote,
-        )
-
-        response = requests.get(
-            url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}/events",
-            params=params,
-            headers={"Authorization": f"Bearer {self.databricks_token}"},
-            timeout=60,
-        )
-
-        payload = response.json()
-
-        if not "events" in payload:
-            return None
-
-        updates = [
-            e["origin"]["update_id"]
-            for e in payload["events"]
-            if e["event_type"] == "create_update"
-        ]
-
-        if not updates:
-            return None
-
-        return next(iter(updates), None)
-
-    def __get_datasets(
-        self,
-        pipeline_id,
-        update_id,
-    ):
-        params = urllib.parse.urlencode(
-            {
-                "order_by": "timestamp desc",
-                "max_results": 100,
-            },
-            quote_via=urllib.parse.quote,
-        )
-
-        response = requests.get(
-            url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}/events",
-            params=params,
-            headers={"Authorization": f"Bearer {self.databricks_token}"},
-            timeout=60,
-        )
-
-        payload = response.json()
-
-        return [
-            e["details"]["flow_definition"]["output_dataset"]
-            for e in payload["events"]
-            if e["event_type"] == "flow_definition"
-            and e["origin"]["update_id"] == update_id
-        ]
+            self.__wait_until_state(pipeline_id=self._get_id(), states=["running"])
 
     def __refresh(
         self,
