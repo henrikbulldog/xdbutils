@@ -61,14 +61,14 @@ class XDBUtils():
 
     def create_dlt_data_manager(
         self,
-        source_system,
-        entity,
         catalog,
-        source_path,
+        source_system = None,
+        entity = None,
         tags = None,
         continuous_workflow = False,
         databricks_token = None,
         databricks_host = None,
+        source_path = None,
         ):
         """ Create a Delta Live Tables Pipeline Data Manager """
 
