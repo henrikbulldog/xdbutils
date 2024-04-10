@@ -86,7 +86,7 @@ class DLTPipelineDataManager(DLTPipelineManager):
                         select *
                         from {self.catalog}.{schema}.{table}
                         """)
-                        print(f"Created view {silver_catalog}.{schema}.{table.replace("silver_", "")}")
+                        print(f"""Created view {silver_catalog}.{schema}.{table.replace("silver_", "")}""")
                     if parts[0] == "gold":
                         self.spark.sql(f"create schema if not exists {gold_catalog}.{schema}")
                         self.spark.sql(f"""
@@ -95,4 +95,4 @@ class DLTPipelineDataManager(DLTPipelineManager):
                         select *
                         from {self.catalog}.{schema}.{table}
                         """)
-                        print(f"Created view {silver_catalog}.{schema}.{table.replace("gold_", "")}")
+                        print(f"""Created view {silver_catalog}.{schema}.{table.replace("gold_", "")}""")
