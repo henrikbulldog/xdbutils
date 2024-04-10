@@ -9,7 +9,7 @@ class DLTPipelineDataManager(DLTPipelineManager):
         id_column,
         ids,
     ):
-        pipeline_id = self.__get_id()
+        pipeline_id = self.get_id()
         assert pipeline_id, f"Pipeline {self.source_system}-{self.entity} not found"
 
         update_id = self.__get_latest_update(

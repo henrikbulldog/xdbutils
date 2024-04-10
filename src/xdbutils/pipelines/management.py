@@ -70,7 +70,7 @@ class DLTPipelineManager():
                 continuous_workflow=self.continuous_workflow,
                 )
 
-            pipeline_id = self.__get_id()
+            pipeline_id = self.get_id()
 
             if pipeline_id:
                 print(f"Updating pipeline {self.source_system}-{self.entity}")
@@ -88,14 +88,37 @@ class DLTPipelineManager():
             print("Could not create DLT workflow.", exc)
             return
 
+    def get_id(
+        self,
+        ):
+        name = f"{self.source_system}-{self.entity}"
+        params = urllib.parse.urlencode(
+            {"filter": f"name LIKE '{name}'"},
+            quote_via=urllib.parse.quote)
+
+        response = requests.get(
+            url=f"https://{self.databricks_host}/api/2.0/pipelines",
+            params=params,
+            headers={"Authorization": f"Bearer {self.databricks_token}"},
+            timeout=60
+            )
+
+        if response.status_code == 200:
+            payload = response.json()
+            if "statuses" in payload.keys():
+                if len(payload["statuses"]) == 1:
+                    return payload["statuses"][0]["pipeline_id"]
+
+        return None
+
     def start(self):
         print(f"Starting pipeline {self.source_system}-{self.entity}")
-        pipeline_id = self.__get_id()
+        pipeline_id = self.get_id()
         self.__refresh(pipeline_id=pipeline_id)
 
     def stop(self):
         print(f"Stopping pipeline {self.source_system}-{self.entity}")
-        pipeline_id = self.__get_id()
+        pipeline_id = self.get_id()
         self.__stop(pipeline_id=pipeline_id)
 
     def __wait_until_state(self, pipeline_id, states):
@@ -119,29 +142,6 @@ class DLTPipelineManager():
                     break
                 if progress.lower() in states:
                     break
-
-    def __get_id(
-        self,
-        ):
-        name = f"{self.source_system}-{self.entity}"
-        params = urllib.parse.urlencode(
-            {"filter": f"name LIKE '{name}'"},
-            quote_via=urllib.parse.quote)
-
-        response = requests.get(
-            url=f"https://{self.databricks_host}/api/2.0/pipelines",
-            params=params,
-            headers={"Authorization": f"Bearer {self.databricks_token}"},
-            timeout=60
-            )
-
-        if response.status_code == 200:
-            payload = response.json()
-            if "statuses" in payload.keys():
-                if len(payload["statuses"]) == 1:
-                    return payload["statuses"][0]["pipeline_id"]
-
-        return None
 
     def __compose_settings(
         self,
@@ -215,7 +215,7 @@ class DLTPipelineManager():
         response.raise_for_status()
 
         if self.continuous_workflow:
-            self.__wait_until_state(pipeline_id=self.__get_id(), states=["running"])
+            self.__wait_until_state(pipeline_id=self.get_id(), states=["running"])
 
     def __get_latest_update(
         self,

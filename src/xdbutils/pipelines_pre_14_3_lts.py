@@ -461,7 +461,7 @@ class DLTPipeline():
                 continuous_workflow=self.continuous_workflow,
                 )
 
-            pipeline_id = self.__get_id()
+            pipeline_id = self.get_id()
 
             if pipeline_id:
                 print(f"Updating pipeline {self.source_system}-{self.entity}")
@@ -484,7 +484,7 @@ class DLTPipeline():
         id_column,
         ids,
     ):
-        pipeline_id = self.__get_id()
+        pipeline_id = self.get_id()
         assert pipeline_id, f"Pipeline {self.source_system}-{self.entity} not found"
 
         update_id = self.__get_latest_update(
@@ -571,12 +571,12 @@ class DLTPipeline():
 
     def start(self):
         print(f"Starting pipeline {self.source_system}-{self.entity}")
-        pipeline_id = self.__get_id()
+        pipeline_id = self.get_id()
         self.__refresh(pipeline_id=pipeline_id)
 
     def stop(self):
         print(f"Stopping pipeline {self.source_system}-{self.entity}")
-        pipeline_id = self.__get_id()
+        pipeline_id = self.get_id()
         self.__stop(pipeline_id=pipeline_id)
 
     def __union_streams(self, sources):
@@ -611,7 +611,7 @@ class DLTPipeline():
                 if progress.lower() in states:
                     break
 
-    def __get_id(
+    def get_id(
         self,
         ):
         name = f"{self.source_system}-{self.entity}"
@@ -706,7 +706,7 @@ class DLTPipeline():
         response.raise_for_status()
 
         if self.continuous_workflow:
-            self.__wait_until_state(pipeline_id=self.__get_id(), states=["running"])
+            self.__wait_until_state(pipeline_id=self.get_id(), states=["running"])
 
     def __get_latest_update(
         self,
