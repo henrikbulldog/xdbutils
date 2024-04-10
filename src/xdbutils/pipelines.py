@@ -492,11 +492,10 @@ class DLTPipeline():
         )
         assert update_id, f"Pipeline {self.source_system}-{self.entity}: latest update not found"
 
-        self.__stop(pipeline_id=pipeline_id)
-
         save_continuous_workflow = self.continuous_workflow
         if self.continuous_workflow:
             print(f"Stopping pipeline {self.source_system}-{self.entity} and setting pipeline mode to triggered instead of continuous")
+            self.__stop(pipeline_id=pipeline_id)
             self.continuous_workflow = False
             self.create_or_update()
 
