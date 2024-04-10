@@ -20,7 +20,7 @@ class DLTPipelineDataManager(DLTPipelineManager):
         save_continuous_workflow = self.continuous_workflow
         if self.continuous_workflow:
             print(f"Stopping pipeline {self.source_system}-{self.entity} and setting pipeline mode to triggered instead of continuous")
-            self.__stop(pipeline_id=pipeline_id)
+            self._stop(pipeline_id=pipeline_id)
             self.continuous_workflow = False
             self.create_or_update()
 
@@ -43,7 +43,7 @@ class DLTPipelineDataManager(DLTPipelineManager):
             self.spark.sql(statement)
         
         print(f"Running pipeline {self.source_system}-{self.entity} with full refresh of: {', '.join(non_bronze_tables)}")
-        self.__refresh(
+        self._refresh(
             pipeline_id=pipeline_id,
             full_refresh_selection=non_bronze_tables,
         )

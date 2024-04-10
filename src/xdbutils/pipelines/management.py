@@ -66,7 +66,7 @@ class DLTPipelineManager():
         """ Create Delta Live Tables Workflow """
 
         try:
-            workflow_settings = self.__compose_settings(
+            workflow_settings = self._compose_settings(
                 continuous_workflow=self.continuous_workflow,
                 )
 
@@ -74,13 +74,13 @@ class DLTPipelineManager():
 
             if pipeline_id:
                 print(f"Updating pipeline {self.source_system}-{self.entity}")
-                self.__update(
+                self._update(
                     pipeline_id=pipeline_id,
                     workflow_settings=workflow_settings,
                     )
             else:
                 print(f"Creating pipeline {self.source_system}-{self.entity}")
-                self.__create(
+                self._create(
                     workflow_settings=workflow_settings,
                     )
         except Exception as exc: # pylint: disable=broad-exception-caught
@@ -91,12 +91,12 @@ class DLTPipelineManager():
     def start(self):
         print(f"Starting pipeline {self.source_system}-{self.entity}")
         pipeline_id = self._get_id()
-        self.__refresh(pipeline_id=pipeline_id)
+        self._refresh(pipeline_id=pipeline_id)
 
     def stop(self):
         print(f"Stopping pipeline {self.source_system}-{self.entity}")
         pipeline_id = self._get_id()
-        self.__stop(pipeline_id=pipeline_id)
+        self._stop(pipeline_id=pipeline_id)
 
     def _get_id(
         self,
@@ -185,7 +185,7 @@ class DLTPipelineManager():
             and e["origin"]["update_id"] == update_id
         ]
 
-    def __wait_until_state(self, pipeline_id, states):
+    def _wait_until_state(self, pipeline_id, states):
         update_id = self._get_latest_update(
             pipeline_id=pipeline_id,
         )
@@ -195,7 +195,7 @@ class DLTPipelineManager():
 
         for x in range(60):
             time.sleep(10)
-            progress = self.__get_progress(
+            progress = self._get_progress(
                 pipeline_id=pipeline_id,
                 update_id=update_id,
             )
@@ -207,7 +207,7 @@ class DLTPipelineManager():
                 if progress.lower() in states:
                     break
 
-    def __compose_settings(
+    def _compose_settings(
         self,
         continuous_workflow,
         ):
@@ -246,7 +246,7 @@ class DLTPipelineManager():
 
         return settings
 
-    def __update(
+    def _update(
         self,
         pipeline_id,
         workflow_settings,
@@ -262,9 +262,9 @@ class DLTPipelineManager():
         response.raise_for_status()
 
         if self.continuous_workflow:
-            self.__wait_until_state(pipeline_id=pipeline_id, states=["running"])
+            self._wait_until_state(pipeline_id=pipeline_id, states=["running"])
 
-    def __create(
+    def _create(
         self,
         workflow_settings,
         ):
@@ -279,9 +279,9 @@ class DLTPipelineManager():
         response.raise_for_status()
 
         if self.continuous_workflow:
-            self.__wait_until_state(pipeline_id=self._get_id(), states=["running"])
+            self._wait_until_state(pipeline_id=self._get_id(), states=["running"])
 
-    def __refresh(
+    def _refresh(
         self,
         pipeline_id,
         full_refresh=False,
@@ -307,9 +307,9 @@ class DLTPipelineManager():
             states = ["running"]
         else:
             states = ["completed"]
-        self.__wait_until_state(pipeline_id=pipeline_id, states=states)
+        self._wait_until_state(pipeline_id=pipeline_id, states=states)
 
-    def __get_progress(
+    def _get_progress(
         self,
         pipeline_id,
         update_id,
@@ -346,7 +346,7 @@ class DLTPipelineManager():
 
         return next(iter(updates), None)
 
-    def __stop(self, pipeline_id):
+    def _stop(self, pipeline_id):
         response = requests.post(
             url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}/stop",
             headers={"Authorization": f"Bearer {self.databricks_token}"},
@@ -355,4 +355,4 @@ class DLTPipelineManager():
 
         response.raise_for_status()
 
-        self.__wait_until_state(pipeline_id=pipeline_id, states=[])
+        self._wait_until_state(pipeline_id=pipeline_id, states=[])

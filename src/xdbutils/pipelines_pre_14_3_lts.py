@@ -457,7 +457,7 @@ class DLTPipeline():
         """ Create Delta Live Tables Workflow """
 
         try:
-            workflow_settings = self.__compose_settings(
+            workflow_settings = self._compose_settings(
                 continuous_workflow=self.continuous_workflow,
                 )
 
@@ -465,13 +465,13 @@ class DLTPipeline():
 
             if pipeline_id:
                 print(f"Updating pipeline {self.source_system}-{self.entity}")
-                self.__update(
+                self._update(
                     pipeline_id=pipeline_id,
                     workflow_settings=workflow_settings,
                     )
             else:
                 print(f"Creating pipeline {self.source_system}-{self.entity}")
-                self.__create(
+                self._create(
                     workflow_settings=workflow_settings,
                     )
         except Exception as exc: # pylint: disable=broad-exception-caught
@@ -495,7 +495,7 @@ class DLTPipeline():
         save_continuous_workflow = self.continuous_workflow
         if self.continuous_workflow:
             print(f"Stopping pipeline {self.source_system}-{self.entity} and setting pipeline mode to triggered instead of continuous")
-            self.__stop(pipeline_id=pipeline_id)
+            self._stop(pipeline_id=pipeline_id)
             self.continuous_workflow = False
             self.create_or_update()
 
@@ -518,7 +518,7 @@ class DLTPipeline():
             self.spark.sql(statement)
         
         print(f"Running pipeline {self.source_system}-{self.entity} with full refresh of: {', '.join(non_bronze_tables)}")
-        self.__refresh(
+        self._refresh(
             pipeline_id=pipeline_id,
             full_refresh_selection=non_bronze_tables,
         )
@@ -572,12 +572,12 @@ class DLTPipeline():
     def start(self):
         print(f"Starting pipeline {self.source_system}-{self.entity}")
         pipeline_id = self._get_id()
-        self.__refresh(pipeline_id=pipeline_id)
+        self._refresh(pipeline_id=pipeline_id)
 
     def stop(self):
         print(f"Stopping pipeline {self.source_system}-{self.entity}")
         pipeline_id = self._get_id()
-        self.__stop(pipeline_id=pipeline_id)
+        self._stop(pipeline_id=pipeline_id)
 
     def __union_streams(self, sources):
         source_tables = [dlt.read_stream(t) for t in sources]
@@ -589,7 +589,7 @@ class DLTPipeline():
         unioned = reduce(lambda x,y: x.unionAll(y), source_tables)
         return unioned
 
-    def __wait_until_state(self, pipeline_id, states):
+    def _wait_until_state(self, pipeline_id, states):
         update_id = self._get_latest_update(
             pipeline_id=pipeline_id,
         )
@@ -599,7 +599,7 @@ class DLTPipeline():
 
         for x in range(60):
             time.sleep(10)
-            progress = self.__get_progress(
+            progress = self._get_progress(
                 pipeline_id=pipeline_id,
                 update_id=update_id,
             )
@@ -634,7 +634,7 @@ class DLTPipeline():
 
         return None
 
-    def __compose_settings(
+    def _compose_settings(
         self,
         continuous_workflow,
         ):
@@ -673,7 +673,7 @@ class DLTPipeline():
 
         return settings
 
-    def __update(
+    def _update(
         self,
         pipeline_id,
         workflow_settings,
@@ -689,9 +689,9 @@ class DLTPipeline():
         response.raise_for_status()
 
         if self.continuous_workflow:
-            self.__wait_until_state(pipeline_id=pipeline_id, states=["running"])
+            self._wait_until_state(pipeline_id=pipeline_id, states=["running"])
 
-    def __create(
+    def _create(
         self,
         workflow_settings,
         ):
@@ -706,7 +706,7 @@ class DLTPipeline():
         response.raise_for_status()
 
         if self.continuous_workflow:
-            self.__wait_until_state(pipeline_id=self._get_id(), states=["running"])
+            self._wait_until_state(pipeline_id=self._get_id(), states=["running"])
 
     def _get_latest_update(
         self,
@@ -772,7 +772,7 @@ class DLTPipeline():
             and e["origin"]["update_id"] == update_id
         ]
 
-    def __refresh(
+    def _refresh(
         self,
         pipeline_id,
         full_refresh=False,
@@ -798,9 +798,9 @@ class DLTPipeline():
             states = ["running"]
         else:
             states = ["completed"]
-        self.__wait_until_state(pipeline_id=pipeline_id, states=states)
+        self._wait_until_state(pipeline_id=pipeline_id, states=states)
 
-    def __get_progress(
+    def _get_progress(
         self,
         pipeline_id,
         update_id,
@@ -837,7 +837,7 @@ class DLTPipeline():
 
         return next(iter(updates), None)
 
-    def __stop(self, pipeline_id):
+    def _stop(self, pipeline_id):
         response = requests.post(
             url=f"https://{self.databricks_host}/api/2.0/pipelines/{pipeline_id}/stop",
             headers={"Authorization": f"Bearer {self.databricks_token}"},
@@ -846,4 +846,4 @@ class DLTPipeline():
 
         response.raise_for_status()
 
-        self.__wait_until_state(pipeline_id=pipeline_id, states=[])
+        self._wait_until_state(pipeline_id=pipeline_id, states=[])
