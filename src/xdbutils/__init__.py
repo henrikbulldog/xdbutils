@@ -2,7 +2,8 @@
 
 from pyspark.sql import DataFrame
 from xdbutils.datalakehouse import DataLakehouse
-from xdbutils.pipelines import DLTPipeline
+from xdbutils.pipelines.source import DLTPipeline
+from xdbutils.pipelines.data import DLTPipelineDataManager
 from xdbutils.transforms import scd2
 from xdbutils.deprecation import deprecated
 from xdbutils.deprecation import deprecated
@@ -56,6 +57,33 @@ class XDBUtils():
             databricks_host=databricks_host,
             source_path=source_path,
             create_or_update = create_or_update,
+            )
+
+    def create_dlt_data_manager(
+        self,
+        source_system,
+        entity,
+        catalog,
+        source_path,
+        tags = None,
+        continuous_workflow = False,
+        databricks_token = None,
+        databricks_host = None,
+        ):
+        """ Create a Delta Live Tables Pipeline Data Manager """
+
+        return DLTPipelineDataManager(
+            spark=self.spark,
+            dbutils=self.dbutils,
+            source_system=source_system,
+            entity=entity,
+            catalog=catalog,
+            tags=tags,
+            continuous_workflow=continuous_workflow,
+            databricks_token=databricks_token,
+            databricks_host=databricks_host,
+            source_path=source_path,
+            create_or_update = False,
             )
 
     @deprecated
