@@ -1,5 +1,5 @@
 from pyspark.sql.functions import col
-from management import DLTPipelineManager
+from xdbutils.pipelines.management import DLTPipelineManager
 
 class DLTPipelineDataManager(DLTPipelineManager):
     """ Delta Live Tables Pipeline Data Manager """
