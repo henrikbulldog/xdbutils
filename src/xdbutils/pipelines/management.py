@@ -253,6 +253,8 @@ class DLTPipelineManager():
             headers={"Authorization": f"Bearer {self.databricks_token}"},
             timeout=60
             )
+        
+        print(response.json())
 
         response.raise_for_status()
 
@@ -270,6 +272,8 @@ class DLTPipelineManager():
             headers={"Authorization": f"Bearer {self.databricks_token}"},
             timeout=60
             )
+
+        print(response.json())
 
         response.raise_for_status()
 
@@ -295,6 +299,8 @@ class DLTPipelineManager():
             headers={"Authorization": f"Bearer {self.databricks_token}"},
             timeout=60,
         )
+
+        print(response.json())
 
         response.raise_for_status()
 
