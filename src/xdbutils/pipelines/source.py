@@ -134,13 +134,8 @@ class DLTPipeline(DLTPipelineManager):
 
         kafka_options = {
             "kafka.bootstrap.servers"  : f"{eventhub_namespace}.servicebus.windows.net:9093",
-            "subscribePattern"         : eventhub_name,
             "kafka.group.id"           : eventhub_group_id,
-            "kafka.sasl.mechanism"     : "OAUTHBEARER",
             "kafka.security.protocol"  : "SASL_SSL",
-            "kafka.sasl.jaas.config"   : f'kafkashaded.org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId="{client_id}" clientSecret="{client_secret}" scope="https://{eventhub_namespace}.servicebus.windows.net/.default" ssl.protocol="SSL";',
-            "kafka.sasl.login.callback.handler.class": "kafkashaded.org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler",
-            "kafka.sasl.oauthbearer.token.endpoint.url": f"https://login.microsoft.com/{azure_tenant_id}/oauth2/v2.0/token",
             "kafka.request.timeout.ms" : "6000",
             "kafka.session.timeout.ms" : "6000",
             "maxOffsetsPerTrigger"     : "600",
@@ -151,9 +146,13 @@ class DLTPipeline(DLTPipelineManager):
         if eventhub_connection_string:
             kafka_options["kafka.sasl.jaas.config"] = f"kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$ConnectionString\" password=\"{eventhub_connection_string}\";"
             kafka_options["kafka.sasl.mechanism"] = "PLAIN"
+            kafka_options["subscribe"] = eventhub_name
         else:
             kafka_options["kafka.sasl.jaas.config"] = f'kafkashaded.org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId="{client_id}" clientSecret="{client_secret}" scope="https://{eventhub_namespace}.servicebus.windows.net/.default" ssl.protocol="SSL";'
             kafka_options["kafka.sasl.mechanism"] = "OAUTHBEARER"
+            kafka_options["subscribePattern"] = eventhub_name
+            kafka_options["kafka.sasl.login.callback.handler.class"] = "kafkashaded.org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler"
+            kafka_options["kafka.sasl.oauthbearer.token.endpoint.url"] = f"https://login.microsoft.com/{azure_tenant_id}/oauth2/v2.0/token"
 
         @dlt.create_table(
             comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
