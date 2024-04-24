@@ -49,7 +49,7 @@ class XDBUtils():
             spark=self.spark,
             dbutils=self.dbutils,
             source_system=source_system,
-            entity=entity,
+            source_class=entity,
             catalog=catalog,
             tags=tags,
             continuous_workflow=continuous_workflow,
@@ -76,7 +76,7 @@ class XDBUtils():
             spark=self.spark,
             dbutils=self.dbutils,
             source_system=source_system,
-            entity=entity,
+            source_class=entity,
             catalog=catalog,
             tags=tags,
             continuous_workflow=continuous_workflow,
@@ -86,56 +86,6 @@ class XDBUtils():
             create_or_update = False,
             )
 
-    @deprecated
-    def create_dlt_batch_pipeline(
-        self,
-        source_system,
-        entity,
-        catalog,
-        tags = None,
-        databricks_token = None,
-        databricks_host = None,
-        source_path = None
-        ):
-        """ Create a Delta Live Tables File/Batch Pipeline """
-
-        return DLTPipeline(
-            spark=self.spark,
-            dbutils=self.dbutils,
-            source_system=source_system,
-            entity=entity,
-            catalog=catalog,
-            tags=tags,
-            databricks_token=databricks_token,
-            databricks_host=databricks_host,
-            source_path=source_path
-        )
-
-    @deprecated
-    def create_dlt_event_pipeline(
-        self,
-        source_system,
-        entity,
-        catalog,
-        tags = None,
-        databricks_token = None,
-        databricks_host = None,
-        source_path = None,
-        ):
-        """ Create a Delta Live Tables Event/Continuous Pipeline """
-
-        return DLTPipeline(
-            spark=self.spark,
-            dbutils=self.dbutils,
-            source_system=source_system,
-            entity=entity,
-            catalog=catalog,
-            tags=tags,
-            continuous_workflow=True,
-            databricks_token=databricks_token,
-            databricks_host=databricks_host,
-            source_path=source_path,
-            )
 
 class Transforms():
     """ Transforms """
