@@ -66,7 +66,6 @@ class XDBUtils():
     def create_dlt_data_manager(
         self,
         catalog,
-        raw_base_path,
         source_system = None,
         entity = None,
         tags = None,
@@ -83,7 +82,7 @@ class XDBUtils():
             source_system=source_system,
             source_class=entity,
             catalog=catalog,
-            raw_base_path= raw_base_path,
+            raw_base_path= None,
             tags=tags,
             continuous_workflow=continuous_workflow,
             databricks_token=databricks_token,
