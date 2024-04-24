@@ -105,9 +105,10 @@ class DLTPipeline(DLTPipelineManager):
         eventhub_namespace,
         eventhub_group_id,
         eventhub_name,
-        client_id,
-        client_secret,
-        azure_tenant_id,
+        client_id = None,
+        client_secret = None,
+        azure_tenant_id = None,
+        eventhub_connection_string = None,
         max_offsets_per_trigger = None,
         starting_offsets = None,
         target_class = None,
@@ -133,7 +134,7 @@ class DLTPipeline(DLTPipelineManager):
 
         kafka_options = {
             "kafka.bootstrap.servers"  : f"{eventhub_namespace}.servicebus.windows.net:9093",
-            "subscribePattern"                : eventhub_name,
+            "subscribePattern"         : eventhub_name,
             "kafka.group.id"           : eventhub_group_id,
             "kafka.sasl.mechanism"     : "OAUTHBEARER",
             "kafka.security.protocol"  : "SASL_SSL",
@@ -146,6 +147,13 @@ class DLTPipeline(DLTPipelineManager):
             "failOnDataLoss"           : 'false',
             "startingOffsets"          : starting_offsets,
         }
+
+        if eventhub_connection_string:
+            kafka_options["kafka.sasl.jaas.config"] = f"kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule required username=\"$ConnectionString\" password=\"{eventhub_connection_string}\";"
+            kafka_options["kafka.sasl.mechanism"] = "PLAIN"
+        else:
+            kafka_options["kafka.sasl.jaas.config"] = f'kafkashaded.org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId="{client_id}" clientSecret="{client_secret}" scope="https://{eventhub_namespace}.servicebus.windows.net/.default" ssl.protocol="SSL";'
+            kafka_options["kafka.sasl.mechanism"] = "OAUTHBEARER"
 
         @dlt.create_table(
             comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
