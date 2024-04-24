@@ -44,7 +44,7 @@ The resulting workflow wil look like this:
 ![Employee workflow](employee_workflow.png)
 
 ### Create the Pipeline
-Calling the method XDBUtils.create_dlt_pipeline() will create or update a DLT workflow. The workflow will be named `<source_system>-<entity>`.
+Calling the method XDBUtils.create_dlt_pipeline() will create or update a DLT workflow. The workflow will be named `<source_system>-<source_class>`.
 
 ```python
 from xdbutils import XDBUtils
@@ -53,7 +53,7 @@ xdbutils = XDBUtils(spark, dbutils)
 
 pipeline = xdbutils.create_dlt_pipeline(
   source_system="demo",
-  entity="employee",
+  source_class="employee",
   catalog="testing_dlt",
   tags={
     "data_owner": "Henrik Thomsen",
@@ -111,7 +111,7 @@ The code above will create a DLT workflow with this definition:
         "cost_center": "123456",
         "documentation": "https://github.com/henrikbulldog/xdbutils",
         "Source system": "demo",
-        "Entity": "employee"
+        "Source class": "employee"
     },
     "target": "demo"
 }
@@ -214,7 +214,7 @@ In order to ingest data from raw to bronze, call raw_to_bronze() with parameters
 
 |Parameter|Description|
 |---------|-----------|
-|**raw_base_path**|Base path to raw data files. The framework will look for files in `raw_base_path/<source_system>/<entity>`|
+|**raw_base_path**|Base path to raw data files. The framework will look for files in `raw_base_path/<source_system>/<source_class>`|
 |**raw_format**|Raw data format; json, csv, parquet|
 |options|Read options, i.e. {"header": True}|
 |expectations|[DLT expectations](https://docs.databricks.com/en/delta-live-tables/expectations.html), rows that do not meet expectations will be marked as quarantined|
@@ -232,7 +232,7 @@ pipeline.raw_to_bronze(
 )
 ```
 
-This will create the table <catalog>.<source system>.bronze_<entity>, for example testing_dlt.demo.bronze_employee.
+This will create the table <catalog>.<source system>.bronze_<source class>, for example testing_dlt.demo.bronze_employee.
 
 ```
 +-----+--------+-----------+---------+--------------------------+-------------+-----------------------+------------+
@@ -285,7 +285,7 @@ pipeline.bronze_to_silver_upsert(
   )
 ```
 
-This will create the table `<catalog>.<source system>.silver_<entity>`, for example `testing_dlt.demo.silver_employee`.
+This will create the table `<catalog>.<source system>.silver_<source class>`, for example `testing_dlt.demo.silver_employee`.
 
 ```
 +------+--------+--------+---------+--------------------------+
@@ -329,7 +329,7 @@ pipeline.bronze_to_silver_track_changes(
   )
   ```
 
-This will create the table `<catalog>.<source system>.silver_<entity>_changes`, for example `testing_dlt.demo.silver_employee_changes`. In this example changes are tracked using SCD type 2, meaning the columns __START_AT and __END_AT specifies the time period for the row.
+This will create the table `<catalog>.<source system>.silver_<source class>_changes`, for example `testing_dlt.demo.silver_employee_changes`. In this example changes are tracked using SCD type 2, meaning the columns __START_AT and __END_AT specifies the time period for the row.
 
 ```
 +------+--------+-----------+---------+--------------------------+--------------------------+--------------------------+
@@ -347,7 +347,7 @@ Call silver_to_gold() with silver to gold transformation method, with parameters
 
 |Parameter|Description|
 |---------|-----------|
-|**name**|Gold table name prefix as in `gold_<entity>_<name>`, i.e. gold_co2emis_top_10|
+|**name**|Gold table name prefix as in `gold_<source class>_<name>`, i.e. gold_co2emis_top_10|
 |parse|A function that transforms imput data. It takes a DataFrame as input and returns a DataFrame|
 |expectations|[DLT expectations](https://docs.databricks.com/en/delta-live-tables/expectations.html)|
 
@@ -363,7 +363,7 @@ pipeline.silver_to_gold(
   )  
 ```
 
-This will create the tables `<catalog>.<source system>.gold_<entity>_<name>`, for example `testing_dlt.textcdc.gold_employee_by_function` and `testing_dlt.textcdc.gold_employee_by_role`.
+This will create the tables `<catalog>.<source system>.gold_<source class>_<name>`, for example `testing_dlt.textcdc.gold_employee_by_function` and `testing_dlt.textcdc.gold_employee_by_role`.
 
 ```
 +--------+-----+
@@ -391,7 +391,7 @@ The resulting DLT workflow will look like this:
 ![clickstream workflow](clickstream_workflow.png)
 
 ### Create the Pipeline
-Calling the method XDBUtils.create_dlt_pipeline() will create or update a. The workflow will be named `<source_system>-<entity>`. Set parameter continuous_workflow = True to make the workflow run continuously.
+Calling the method XDBUtils.create_dlt_pipeline() will create or update a. The workflow will be named `<source_system>-<source_class>`. Set parameter continuous_workflow = True to make the workflow run continuously.
 
 ```python
 from xdbutils import XDBUtils
@@ -400,7 +400,7 @@ xdbutils = XDBUtils(spark, dbutils)
 
 pipeline = xdbutils.create_dlt_pipeline(
   source_system="demo",
-  entity="clickstream",
+  source_class="clickstream",
   catalog="testing_dlt",
   tags={
     "data_owner": "Henrik Thomsen",
@@ -459,7 +459,7 @@ The code above will create a DLT workflow with this definition:
         "cost_center": "123456",
         "documentation": "https://github.com/henrikbulldog/xdbutils",
         "Source system": "demo",
-        "Entity": "clickstream"
+        "Source class": "clickstream"
     },
     "target": "demo"
 }
@@ -488,7 +488,7 @@ pipeline.event_to_bronze(
 )
 ```
 
-This will create the table <catalog>.<source system>.bronze_<entity>, for example testing_dlt.demo.clickstream.
+This will create the table <catalog>.<source system>.bronze_<source class>, for example testing_dlt.demo.clickstream.
 
 ```
 +----+-----+----------+---------+------+----------------------+-------------+-----------------------+------------+
@@ -552,7 +552,7 @@ pipeline.bronze_to_silver_append(
 )
 ```
 
-This will create the table `<catalog>.<source system>.silver_<entity>`, for example `testing_dlt.demo.silver_clickstream`.
+This will create the table `<catalog>.<source system>.silver_<source class>`, for example `testing_dlt.demo.silver_clickstream`.
 
 ```
 +-------------------+------------+------------------------------------+------------------------------------+----------------------------------+-------------------+--------------------------------+-------+-------+------------------+-------------------+-------------+----------+----------+------+-----------+
@@ -624,7 +624,7 @@ from pyspark.sql.functions import explode
 
 raw2bronze_job = (
     datalakehouse
-    .raw2bronze_job(source_system="eds", entity="co2emis")
+    .raw2bronze_job(source_system="eds", source_class="co2emis")
     .read_from_json(options={"multiline": True})
     .transform(lambda df: (
         df.withColumn("record", explode("records"))
@@ -681,7 +681,7 @@ Call XDButils.delete_persons() with parameters:
 |id_column|Column that uniquely identifies rows to be deleted, for example "emp_id"|
 |ids|Comma-separated list of id values, for example "1234,4321"|
 |source_system|Source system or schema, for example "demo"|
-|entity|Entity, for example "employee"|
+|source_class|Entity, for example "employee"|
 |calatog|Unity catalog containing tables|
 |databricks_token|A Databricks access token for [authentication to the Databricks API](https://docs.databricks.com/en/dev-tools/auth.html#databricks-personal-access-token-authentication)|
 |databricks_host|If omitted, the framework will get the host from the calling notebook context|

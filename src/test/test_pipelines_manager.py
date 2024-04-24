@@ -20,7 +20,7 @@ class DLTPipelineManagerTestCase(unittest.TestCase):
             spark=spark,
             dbutils=dbutils,
             source_system="testcdc",
-            entity="employee",
+            source_class="employee",
             catalog="testing_dlt",
             tags={
                 "data_owner": "Henrik Thomsen",
@@ -40,7 +40,7 @@ class DLTPipelineManagerTestCase(unittest.TestCase):
             spark=spark,
             dbutils=dbutils,
             source_system="testcdc",
-            entity="employee",
+            source_class="employee",
             catalog="testing_dlt",
             tags={
                 "data_owner": "Henrik Thomsen",

@@ -10,10 +10,12 @@ class DLTPipelineManager():
         spark,
         dbutils,
         source_system,
-        entity,
+        source_class,
         catalog,
+        raw_base_path = None,
         tags = None,
         continuous_workflow = False,
+        serverless = False,
         databricks_token = None,
         databricks_host = None,
         source_path = None,
@@ -24,9 +26,11 @@ class DLTPipelineManager():
         self.dbutils = dbutils
         self.source_system = source_system
         self.source_path = source_path
-        self.entity = entity
+        self.source_class = source_class
         self.catalog = catalog
+        self.raw_base_path = raw_base_path
         self.continuous_workflow = continuous_workflow
+        self.serverless = serverless
         self.tags = tags
         self.databricks_token = databricks_token
         self.databricks_host = databricks_host
@@ -55,7 +59,7 @@ class DLTPipelineManager():
         if not self.tags:
             self.tags = {}
         self.tags["Source system"] = self.source_system
-        self.tags["Entity"] = self.entity
+        self.tags["source_class"] = self.source_class
 
         if create_or_update:
             self.create_or_update()
@@ -73,13 +77,13 @@ class DLTPipelineManager():
             pipeline_id = self._get_id()
 
             if pipeline_id:
-                print(f"Updating pipeline {self.source_system}-{self.entity}")
+                print(f"Updating pipeline {self.source_system}-{self.source_class}")
                 self._update(
                     pipeline_id=pipeline_id,
                     workflow_settings=workflow_settings,
                     )
             else:
-                print(f"Creating pipeline {self.source_system}-{self.entity}")
+                print(f"Creating pipeline {self.source_system}-{self.source_class}")
                 self._create(
                     workflow_settings=workflow_settings,
                     )
@@ -89,19 +93,19 @@ class DLTPipelineManager():
             return
 
     def start(self):
-        print(f"Starting pipeline {self.source_system}-{self.entity}")
+        print(f"Starting pipeline {self.source_system}-{self.source_class}")
         pipeline_id = self._get_id()
         self._refresh(pipeline_id=pipeline_id)
 
     def stop(self):
-        print(f"Stopping pipeline {self.source_system}-{self.entity}")
+        print(f"Stopping pipeline {self.source_system}-{self.source_class}")
         pipeline_id = self._get_id()
         self._stop(pipeline_id=pipeline_id)
 
     def _get_id(
         self,
         ):
-        name = f"{self.source_system}-{self.entity}"
+        name = f"{self.source_system}-{self.source_class}"
         params = urllib.parse.urlencode(
             {"filter": f"name LIKE '{name}'"},
             quote_via=urllib.parse.quote)
@@ -190,7 +194,7 @@ class DLTPipelineManager():
             pipeline_id=pipeline_id,
         )
         if not update_id:
-            print(f"Pipeline {self.source_system}-{self.entity}: latest update not found")
+            print(f"Pipeline {self.source_system}-{self.source_class}: latest update not found")
             return
 
         for x in range(60):
@@ -199,9 +203,9 @@ class DLTPipelineManager():
                 pipeline_id=pipeline_id,
                 update_id=update_id,
             )
-            print(f"{self.source_system}-{self.entity}, update_id: {update_id}, progress: {progress}")
+            print(f"{self.source_system}-{self.source_class}, update_id: {update_id}, progress: {progress}")
             if progress:
-                assert progress.lower() != "failed", f"Pipeline {self.source_system}-{self.entity}: update failed"
+                assert progress.lower() != "failed", f"Pipeline {self.source_system}-{self.source_class}: update failed"
                 if progress.lower() == "canceled":
                     break
                 if progress.lower() in states:
@@ -213,19 +217,9 @@ class DLTPipelineManager():
         ):
 
         settings = {
-            "name": f"{self.source_system}-{self.entity}",
+            "name": f"{self.source_system}-{self.source_class}",
             "edition": "Advanced",
             "development": True,
-            "clusters": [
-                {
-                "label": "default",
-                "autoscale": {
-                    "min_workers": 1,
-                    "max_workers": 2,
-                    "mode": "ENHANCED"
-                }
-                }
-            ],
             "channel": "PREVIEW",
             "libraries": [
                 {
@@ -236,6 +230,7 @@ class DLTPipelineManager():
             ],
             "catalog": self.catalog,
             "target": self.source_system,
+            "serverless": not self.serverless,
             "configuration": {
                 "pipelines.enableTrackHistory": "true"
             },

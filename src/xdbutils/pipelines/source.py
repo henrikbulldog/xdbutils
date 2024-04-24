@@ -1,31 +1,36 @@
 try:
     import dlt  # type: ignore
-except: # pylint: disable=bare-except
+except:  # pylint: disable=bare-except
     from unittest.mock import MagicMock
+
     class MockDlt:
-        """ Mock dlt module, since dlt module could not be loaded """
+        """Mock dlt module, since dlt module could not be loaded"""
+
         def __getattr__(self, name):
             return MagicMock()
 
         def __call__(self, *args, **kwargs):
             return MagicMock()
+
     dlt = MockDlt()
 
 from functools import reduce
 from typing import Callable
+import warnings
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, current_timestamp, expr, lit
 from xdbutils.pipelines.management import DLTPipelineManager
 
 class DLTPipeline(DLTPipelineManager):
-    """ Delta Live Tables Pipeline """
+    """Delta Live Tables Pipeline"""
 
     def raw_to_bronze(
         self,
-        raw_base_path,
-        raw_format,
-        source_entity = None,
-        target_entity = None,
+        data_type = None,
+        environment = None,
+        raw_format = None,
+        source_class = None,
+        target_class = None,
         options = None,
         schema = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
@@ -34,10 +39,20 @@ class DLTPipeline(DLTPipelineManager):
         ):
         """ Raw to bronze """
 
-        if not source_entity:
-            source_entity = self.entity
-        if not target_entity:
-            target_entity = self.entity
+        if data_type:
+            warnings.warn("Parameter data_type is deprecated",
+                category=DeprecationWarning,
+                stacklevel=2)
+        if environment:
+            warnings.warn("Parameter environment is deprecated",
+                category=DeprecationWarning,
+                stacklevel=2)
+        if not raw_format:
+            raise Exception("Raw format must be specified")
+        if not source_class:
+            source_class = self.source_class
+        if not target_class:
+            target_class = self.source_class
         if not options:
             options = {}
         if not partition_cols:
@@ -50,7 +65,7 @@ class DLTPipeline(DLTPipelineManager):
 
         @dlt.table(
             comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
-            name=f"bronze_{target_entity}",
+            name=f"bronze_{target_class}",
             table_properties={
                 "quality": "bronze",
                 "pipeline.reset.allow": "false"
@@ -66,7 +81,7 @@ class DLTPipeline(DLTPipelineManager):
             reader.option("cloudFiles.format", raw_format)
             if "json" in raw_format.lower():
                 reader.option("cloudFiles.schemaLocation",
-                    f"{raw_base_path}/checkpoints/{self.source_system}/{source_entity}")
+                    f"{self.raw_base_path}/checkpoints/{self.source_system}/{source_class}")
                 reader.option("cloudFiles.inferColumnTypes", "true")
             if schema:
                 reader.schema(schema)
@@ -75,7 +90,7 @@ class DLTPipeline(DLTPipelineManager):
 
             result_df = (
                 reader
-                .load(f"{raw_base_path}/{self.source_system}/{source_entity}")
+                .load(f"{self.raw_base_path}/{self.source_system}/{source_class}")
                 .transform(parse)
                 .withColumn("_ingest_time", current_timestamp())
             )
@@ -90,19 +105,24 @@ class DLTPipeline(DLTPipelineManager):
         eventhub_namespace,
         eventhub_group_id,
         eventhub_name,
-        eventhub_connection_string,
+        client_id,
+        client_secret,
+        azure_tenant_id,
+        max_offsets_per_trigger = None,
         starting_offsets = None,
-        target_entity = None,
+        target_class = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         partition_cols = None,
         expectations = None,
     ):
         """ Event to bronze """
 
+        if not max_offsets_per_trigger:
+            max_offsets_per_trigger = "600"
         if not starting_offsets:
             starting_offsets = "latest"
-        if not target_entity:
-            target_entity = self.entity
+        if not target_class:
+            target_class = self.source_class
         if not partition_cols:
             partition_cols = []
         if not expectations:
@@ -113,24 +133,23 @@ class DLTPipeline(DLTPipelineManager):
 
         kafka_options = {
             "kafka.bootstrap.servers"  : f"{eventhub_namespace}.servicebus.windows.net:9093",
-            "subscribe"                : eventhub_name,
+            "subscribePattern"                : eventhub_name,
             "kafka.group.id"           : eventhub_group_id,
-            "kafka.sasl.mechanism"     : "PLAIN",
+            "kafka.sasl.mechanism"     : "OAUTHBEARER",
             "kafka.security.protocol"  : "SASL_SSL",
-            "kafka.sasl.jaas.config"   : 
-                "kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule" +
-                " required username=\"$ConnectionString\"" +
-                f" password=\"{eventhub_connection_string}\";",
+            "kafka.sasl.jaas.config"   : f'kafkashaded.org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId="{client_id}" clientSecret="{client_secret}" scope="https://{eventhub_namespace}.servicebus.windows.net/.default" ssl.protocol="SSL";',
+            "kafka.sasl.login.callback.handler.class": "kafkashaded.org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler",
+            "kafka.sasl.oauthbearer.token.endpoint.url": f"https://login.microsoft.com/{azure_tenant_id}/oauth2/v2.0/token",
             "kafka.request.timeout.ms" : "6000",
             "kafka.session.timeout.ms" : "6000",
             "maxOffsetsPerTrigger"     : "600",
-            "failOnDataLoss"           : 'true',
+            "failOnDataLoss"           : 'false',
             "startingOffsets"          : starting_offsets,
         }
 
         @dlt.create_table(
             comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
-            name=f"bronze_{target_entity}",
+            name=f"bronze_{target_class}",
             table_properties={
                 "quality": "bronze",
                 "pipeline.reset.allow": "false"
@@ -145,7 +164,6 @@ class DLTPipeline(DLTPipelineManager):
                 .load()
                 .transform(parse)
                 .withColumn("_ingest_time", current_timestamp())
-                .withColumn("_quarantined", lit(False))
             )
 
             if quarantine_rules:
@@ -155,8 +173,8 @@ class DLTPipeline(DLTPipelineManager):
 
     def bronze_to_silver_append(
         self,
-        source_entities = None,
-        target_entity = None,
+        source_classes = None,
+        target_class = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         partition_cols = None,
         expectations = None,
@@ -165,10 +183,10 @@ class DLTPipeline(DLTPipelineManager):
 
         if not partition_cols:
             partition_cols = []
-        if not source_entities:
-            source_entities = [self.entity]
-        if not target_entity:
-            target_entity = self.entity
+        if not source_classes:
+            source_classes = [self.source_class]
+        if not target_class:
+            target_class = self.source_class
 
         if not partition_cols:
             partition_cols = []
@@ -181,21 +199,23 @@ class DLTPipeline(DLTPipelineManager):
 
         @dlt.table(
             comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
-            name=f"silver_{target_entity}",
+            name=f"silver_{target_class}",
             table_properties={
                 "quality": "silver"
             },
             partition_cols=partition_cols,
         )
         def dlt_table():
+            silver_df = self.__union_streams([f"bronze_{t}" for t in source_classes])
 
-            silver_df = (
-                self.__union_streams([f"bronze_{t}" for t in source_entities])
-                .where(col("_quarantined") == lit(False))
-                .drop("_quarantined")
-                .transform(parse)
-                .withColumn("_quarantined", lit(False))
-            )
+            if "_quarantined".upper() in (name.upper() for name in silver_df.columns):
+                silver_df = (
+                    silver_df
+                    .where(col("_quarantined") == lit(False))
+                    .drop("_quarantined")
+                )
+
+            silver_df = silver_df.transform(parse)
 
             if quarantine_rules:
                 silver_df = silver_df.withColumn("_quarantined", expr(quarantine_rules))
@@ -209,8 +229,8 @@ class DLTPipeline(DLTPipelineManager):
         self,
         keys,
         sequence_by,
-        source_entities = None,
-        target_entity = None,
+        source_classes = None,
+        target_class = None,
         ignore_null_updates = False,
         apply_as_deletes = None,
         apply_as_truncates = None,
@@ -224,10 +244,10 @@ class DLTPipeline(DLTPipelineManager):
 
         if not partition_cols:
             partition_cols = []
-        if not source_entities:
-            source_entities = [self.entity]
-        if not target_entity:
-            target_entity = self.entity
+        if not source_classes:
+            source_classes = [self.source_class]
+        if not target_class:
+            target_class = self.source_class
 
         if not partition_cols:
             partition_cols = []
@@ -238,15 +258,18 @@ class DLTPipeline(DLTPipelineManager):
         else:
             quarantine_rules = f'NOT(({") AND (".join(expectations.values())}))'
 
-        @dlt.view(name=f"view_silver_{target_entity}")
+        @dlt.view(name=f"view_silver_{target_class}")
         def dlt_view():
-            silver_df = (
-                self.__union_streams([f"bronze_{t}" for t in source_entities])
-                .where(col("_quarantined") == lit(False))
-                .drop("_quarantined")
-                .transform(parse)
-                .withColumn("_quarantined", lit(False))
-            )
+            silver_df = self.__union_streams([f"bronze_{t}" for t in source_classes])
+
+            if "_quarantined".upper() in (name.upper() for name in silver_df.columns):
+                silver_df = (
+                    silver_df
+                    .where(col("_quarantined") == lit(False))
+                    .drop("_quarantined")
+                )
+
+            silver_df = silver_df.transform(parse)
 
             if quarantine_rules:
                 silver_df = silver_df.withColumn("_quarantined", expr(quarantine_rules))
@@ -257,7 +280,7 @@ class DLTPipeline(DLTPipelineManager):
             return silver_df
         
         dlt.create_streaming_table(
-            name=f"silver_{target_entity}",
+            name=f"silver_{target_class}",
             comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
             table_properties={
                 "quality": "bronze"
@@ -266,8 +289,8 @@ class DLTPipeline(DLTPipelineManager):
             )
 
         dlt.apply_changes(
-            target=f"silver_{target_entity}",
-            source=f"view_silver_{target_entity}",
+            target=f"silver_{target_class}",
+            source=f"view_silver_{target_class}",
             keys=keys,
             sequence_by=col(sequence_by),
             ignore_null_updates=ignore_null_updates,
@@ -281,8 +304,8 @@ class DLTPipeline(DLTPipelineManager):
         self,
         keys,
         sequence_by,
-        source_entities = None,
-        target_entity = None,
+        source_classes = None,
+        target_class = None,
         ignore_null_updates = False,
         apply_as_deletes = None,
         apply_as_truncates = None,
@@ -297,10 +320,10 @@ class DLTPipeline(DLTPipelineManager):
         """ Bronze to Silver, change data capture,
         see https://docs.databricks.com/en/delta-live-tables/cdc.html """
 
-        if not source_entities:
-            source_entities = [self.entity]
-        if not target_entity:
-            target_entity = self.entity
+        if not source_classes:
+            source_classes = [self.source_class]
+        if not target_class:
+            target_class = self.source_class
         if not partition_cols:
             partition_cols = []
 
@@ -316,15 +339,19 @@ class DLTPipeline(DLTPipelineManager):
         if not track_history_except_column_list:
             track_history_except_column_list = [sequence_by]
 
-        @dlt.view(name=f"view_silver_{target_entity}_changes")
+        @dlt.view(name=f"view_silver_{target_class}_changes")
+        @dlt.expect_all(expectations)
         def dlt_view():
-            silver_df = (
-                self.__union_streams([f"bronze_{t}" for t in source_entities])
-                .where(col("_quarantined") == lit(False))
-                .drop("_quarantined")
-                .transform(parse)
-                .withColumn("_quarantined", lit(False))
-            )
+            silver_df = self.__union_streams([f"bronze_{t}" for t in source_classes])
+
+            if "_quarantined".upper() in (name.upper() for name in silver_df.columns):
+                silver_df = (
+                    silver_df
+                    .where(col("_quarantined") == lit(False))
+                    .drop("_quarantined")
+                )
+
+            silver_df = silver_df.transform(parse)
 
             if quarantine_rules:
                 silver_df = silver_df.withColumn("_quarantined", expr(quarantine_rules))
@@ -335,7 +362,7 @@ class DLTPipeline(DLTPipelineManager):
             return silver_df
 
         dlt.create_streaming_table(
-            name=f"silver_{target_entity}_changes",
+            name=f"silver_{target_class}_changes",
             comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
             table_properties={
                 "quality": "bronze"
@@ -344,8 +371,8 @@ class DLTPipeline(DLTPipelineManager):
             )
 
         dlt.apply_changes(
-            target=f"silver_{target_entity}_changes",
-            source=f"view_silver_{target_entity}_changes",
+            target=f"silver_{target_class}_changes",
+            source=f"view_silver_{target_class}_changes",
             keys=keys,
             sequence_by=col(sequence_by),
             stored_as_scd_type="2",
@@ -361,40 +388,48 @@ class DLTPipeline(DLTPipelineManager):
     def silver_to_gold(
         self,
         name,
-        source_entities = None,
-        target_entity = None,
+        source_classes = None,
+        target_class = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
         """ Bronze to Silver """
 
-        if not source_entities:
-            source_entities = [self.entity]
-        if not target_entity:
-            target_entity = self.entity
+        if not source_classes:
+            source_classes = [self.source_class]
+        if not target_class:
+            target_class = self.source_class
         if not expectations:
             expectations = {}
 
         @dlt.table(
             comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
-            name=f"gold_{target_entity}_{name}",
+            name=f"gold_{target_class}_{name}",
             table_properties={
                 "quality": "gold"
             },
         )
         @dlt.expect_all_or_fail(expectations)
         def dlt_table():
+            gold_df = self.__union_tables([f"silver_{t}" for t in source_classes])
+
+            if "_quarantined".upper() in (name.upper() for name in gold_df.columns):
+                gold_df = (
+                    gold_df
+                    .where(col("_quarantined") == lit(False))
+                    .drop("_quarantined")
+                )
+
             return (
-                self.__union_tables([f"silver_{t}" for t in source_entities])
-                .transform(parse)
+                gold_df.transform(parse)
             )
 
     def __union_streams(self, sources):
         source_tables = [dlt.read_stream(t) for t in sources]
-        unioned = reduce(lambda x,y: x.unionAll(y), source_tables)
+        unioned = reduce(lambda x, y: x.unionAll(y), source_tables)
         return unioned
 
     def __union_tables(self, sources):
         source_tables = [dlt.read(t) for t in sources]
-        unioned = reduce(lambda x,y: x.unionAll(y), source_tables)
+        unioned = reduce(lambda x, y: x.unionAll(y), source_tables)
         return unioned
