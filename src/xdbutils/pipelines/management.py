@@ -230,7 +230,7 @@ class DLTPipelineManager():
             ],
             "catalog": self.catalog,
             "target": self.source_system,
-            "serverless": not self.serverless,
+            "serverless": self.serverless,
             "configuration": {
                 "pipelines.enableTrackHistory": "true"
             },
