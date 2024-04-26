@@ -729,3 +729,40 @@ DATABRICKS_CLUSTER_ID=<Databricks cluster ID>
 ```
 
 See the folder .devcontainer for configuration of VS Code devcontainer with Databricks Connect
+
+# Multi-Notebook Design
+Notebook /Workspace/Repos/DLT/data-platform-databricks-dlt/notebooks/demo/dlt_adx_all (Any cluster type):
+```
+    mgr = get_dlt_manager(
+        source_system,
+        catalog,
+        pipeline_name = "ADX_All",
+        tags = {},
+        continuous_workflow = False,
+        serverless = True,
+        databricks_token = ...,
+        databricks_host = ...,
+        source_paths = [
+          "/Workspace/Repos/DLT/data-platform-databricks-dlt/notebooks/demo/src_adx_telemetry",
+          "/Workspace/Repos/DLT/data-platform-databricks-dlt/notebooks/demo/src_adx_metadata"
+          ],
+        )
+    
+    mgr.create_or_update()
+    mgr.start()
+    mgr.stop()
+```
+
+Notebook /Workspace/Repos/DLT/data-platform-databricks-dlt/notebooks/demo/src_adx_telemetry (Personal cluster):
+```
+    src = get_dlt_source(
+        source_system,
+        entity,
+        raw_base_path,
+        tags = None,
+        )
+
+    src.raw_to_bronze()
+    src.bronze_to_silver()
+    ...
+```

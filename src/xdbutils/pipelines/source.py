@@ -68,7 +68,6 @@ class DLTPipeline(DLTPipelineManager):
             name=f"bronze_{target_class}",
             table_properties={
                 "quality": "bronze",
-                "pipeline.reset.allow": "false"
             },
             partition_cols=partition_cols,
         )
@@ -159,7 +158,7 @@ class DLTPipeline(DLTPipelineManager):
             name=f"bronze_{target_class}",
             table_properties={
                 "quality": "bronze",
-                "pipeline.reset.allow": "false"
+                "pipelines.reset.allowed": "false"
             },
             partition_cols=partition_cols,
         )
