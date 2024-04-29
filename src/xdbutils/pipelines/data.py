@@ -1,5 +1,4 @@
 from datetime import datetime
-import warnings
 from pyspark.sql.functions import col
 from xdbutils.pipelines.management import DLTPipelineManager
 

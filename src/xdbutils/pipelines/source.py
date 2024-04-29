@@ -21,6 +21,7 @@ from pyspark.sql import Column
 from pyspark.sql.functions import col, current_timestamp, expr, lit
 
 class DLTPipelineSource():
+    """class contains typical source functions for a DLT pipeline"""
 
     def __init__(
         self,
