@@ -28,7 +28,7 @@ class XDBUtils():
         """ Transforms """
         return self._transforms
 
-    def help():
+    def help(self):
         print("This module exposes a collection of utilities for building enterprise data pipelines")
         print("create_dlt_pipeline_source(source_system, source_class, raw_base_path, tags): DLTPipelineSource -> Create a class with Delta Live Tables source functions")
         print("create_dlt_pipeline_manager(source_system, source_class, catalog, tags, continuous_workflow, serverless, databricks_token, databricks_host): DLTPipelineManager -> Create a Delta Live Table pipeline manager")

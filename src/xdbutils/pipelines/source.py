@@ -44,7 +44,7 @@ class DLTPipelineSource():
         self.tags["Source system"] = self.source_system
         self.tags["source_class"] = self.source_class
 
-    def help():
+    def help(self):
         print("This class contains typical source functions for a DLT pipeline")
         print("raw_to_bronze(raw_format, source_class, target_class, options, schema, parse, partition_cols, expectations) -> Ingest data from a raw folder to a streaming table using Auto Loader")
         print("event_to_bronze(eventhub_namespace, eventhub_group_id, eventhub_name, client_id, client_secret, azure_tenant_id, eventhub_connection_string, max_offsets_per_trigger, starting_offsets, target_class, parse, partition_cols, expectations) -> Ingest data from an Event Hub to a streaming table")

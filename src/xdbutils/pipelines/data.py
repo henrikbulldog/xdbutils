@@ -4,7 +4,7 @@ from pyspark.sql.functions import col
 from xdbutils.pipelines.management import DLTPipelineManager
 
 class DLTPipelineDataManager(DLTPipelineManager):
-    def help():
+    def help(self):
         print("Delta Live Tables data manager")
         print("delete_persons(id_column, ids) -> Delete personally identifiable data from a Delta Live Table pipeline")
         print("expose_tables(silver_catalog, gold_catalog) -> Expose silver and gold tables as views in another catalog")

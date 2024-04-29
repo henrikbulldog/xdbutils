@@ -58,7 +58,7 @@ class DLTPipelineManager():
         self.tags["Source system"] = self.source_system
         self.tags["source_class"] = self.source_class
 
-    def help():
+    def help(self):
         print("This module manages a DLT pipeline")
         print("create_or_update() -> Create or updates a DLT pipeline")
         print("start() -> Starts a DLT pipeline")
