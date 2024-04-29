@@ -16,8 +16,8 @@ except:  # pylint: disable=bare-except
 
 from functools import reduce
 from typing import Callable
-import warnings
 from pyspark.sql import DataFrame
+from pyspark.sql import Column
 from pyspark.sql.functions import col, current_timestamp, expr, lit
 
 class DLTPipelineSource():
@@ -46,25 +46,25 @@ class DLTPipelineSource():
 
     def help(self):
         print("This class contains typical source functions for a DLT pipeline")
-        print("raw_to_bronze(raw_format, source_class, target_class, options, schema, parse, partition_cols, expectations) -> Ingest data from a raw folder to a streaming table using Auto Loader")
-        print("event_to_bronze(eventhub_namespace, eventhub_group_id, eventhub_name, client_id, client_secret, azure_tenant_id, eventhub_connection_string, max_offsets_per_trigger, starting_offsets, target_class, parse, partition_cols, expectations) -> Ingest data from an Event Hub to a streaming table")
-        print("bronze_to_silver_append(source_classes, target_class, parse, partition_cols, expectations) -> Append data from one or more bronze tables to a silver table")
-        print("bronze_to_silver_upsert(keys, sequence_by, source_classes, target_class, ignore_null_updates, apply_as_deletes, apply_as_truncates, column_list, except_column_list, parse, partition_cols, expectations) -> Upsert data from one or more bronze tables to a silver table")
-        print("bronze_to_silver_track_changes(keys, sequence_by, source_classes, target_class, ignore_null_updates, apply_as_deletes, apply_as_truncates, column_list, except_column_list, track_history_column_list, track_history_except_column_list, parse, partition_cols, expectations) -> Track changes in data from one or more bronze tables to a silver table")
-        print("silver_to_gold(name, source_classes, target_class, parse, expectations)")
+        print("raw_to_bronze() -> Ingest data from a raw folder to a streaming table using Auto Loader")
+        print("event_to_bronze() -> Ingest data from an Event Hub to a streaming table")
+        print("bronze_to_silver_append() -> Append data from one or more bronze tables to a silver table")
+        print("bronze_to_silver_upsert() -> Upsert data from one or more bronze tables to a silver table")
+        print("bronze_to_silver_track_changes() -> Track changes in data from one or more bronze tables to a silver table")
+        print("silver_to_gold() -> Ingest data from one or more silver tables to a gold table")
 
     def raw_to_bronze(
         self,
-        raw_format,
-        source_class = None,
-        target_class = None,
-        options = None,
-        schema = None,
+        raw_format: str,
+        source_class: str = None,
+        target_class: str = None,
+        options: str = None,
+        schema: str = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-        partition_cols = None,
-        expectations = None,
+        partition_cols: list[str] = None,
+        expectations: dict = None,
         ):
-        """ Raw to bronze """
+        """Ingest data from a raw folder to a streaming table using Auto Loader"""
 
         if not source_class:
             source_class = self.source_class
@@ -118,20 +118,21 @@ class DLTPipelineSource():
 
     def event_to_bronze(
         self,
-        eventhub_namespace,
-        eventhub_group_id,
-        eventhub_name,
-        client_id = None,
-        client_secret = None,
-        azure_tenant_id = None,
-        eventhub_connection_string = None,
-        max_offsets_per_trigger = None,
-        starting_offsets = None,
-        target_class = None,
+        eventhub_namespace: str,
+        eventhub_group_id: str,
+        eventhub_name: str,
+        client_id: str = None,
+        client_secret: str = None,
+        azure_tenant_id: str = None,
+        eventhub_connection_string: str = None,
+        max_offsets_per_trigger: str = None,
+        starting_offsets: str = None,
+        target_class: str = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-        partition_cols = None,
-        expectations = None,
+        partition_cols: list[str] = None,
+        expectations: dict = None,
     ):
+        """Ingest data from an Event Hub to a streaming table"""
 
         if not max_offsets_per_trigger:
             max_offsets_per_trigger = "600"
@@ -195,12 +196,13 @@ class DLTPipelineSource():
 
     def bronze_to_silver_append(
         self,
-        source_classes = None,
-        target_class = None,
+        source_classes: str = None,
+        target_class: str = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-        partition_cols = None,
-        expectations = None,
+        partition_cols: list[str] = None,
+        expectations: dict = None,
         ):
+        """Append data from one or more bronze tables to a silver table"""
 
         if not partition_cols:
             partition_cols = []
@@ -248,19 +250,20 @@ class DLTPipelineSource():
 
     def bronze_to_silver_upsert(
         self,
-        keys,
-        sequence_by,
-        source_classes = None,
-        target_class = None,
-        ignore_null_updates = False,
-        apply_as_deletes = None,
-        apply_as_truncates = None,
-        column_list = None,
-        except_column_list = None,
+        keys: list[str],
+        sequence_by: str,
+        source_classes: list[str] = None,
+        target_class: str = None,
+        ignore_null_updates: bool = False,
+        apply_as_deletes: Column = None,
+        apply_as_truncates: Column = None,
+        column_list: list[str] = None,
+        except_column_list: list[str] = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-        partition_cols = None,
-        expectations = None,
+        partition_cols: list[str] = None,
+        expectations: dict = None,
         ):
+        """Upsert data from one or more bronze tables to a silver table"""
 
         if not partition_cols:
             partition_cols = []
@@ -322,22 +325,22 @@ class DLTPipelineSource():
 
     def bronze_to_silver_track_changes(
         self,
-        keys,
-        sequence_by,
-        source_classes = None,
-        target_class = None,
-        ignore_null_updates = False,
-        apply_as_deletes = None,
-        apply_as_truncates = None,
-        column_list = None,
-        except_column_list = None,
-        track_history_column_list = None,
-        track_history_except_column_list = None,
+        keys: list[str],
+        sequence_by: str,
+        source_classes: list[str] = None,
+        target_class: str = None,
+        ignore_null_updates: bool = False,
+        apply_as_deletes: Column = None,
+        apply_as_truncates: Column = None,
+        column_list: list[str] = None,
+        except_column_list: list[str] = None,
+        track_history_column_list: list[str] = None,
+        track_history_except_column_list: list[str] = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-        partition_cols = None,
-        expectations = None,
+        partition_cols: list[str] = None,
+        expectations: dict = None,
         ):
-        """ Bronze to Silver, change data capture,
+        """ Track changes in data from one or more bronze tables to a silver table,
         see https://docs.databricks.com/en/delta-live-tables/cdc.html """
 
         if not source_classes:
@@ -407,12 +410,13 @@ class DLTPipelineSource():
 
     def silver_to_gold(
         self,
-        name,
-        source_classes = None,
-        target_class = None,
+        name: str,
+        source_classes: list[str] = None,
+        target_class: str = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
-        expectations = None
+        expectations: dict = None
         ):
+        """Ingest data from one or more silver tables to a gold table"""
 
         if not source_classes:
             source_classes = [self.source_class]

@@ -1,23 +1,24 @@
 import time
 import urllib
 import requests
+from pyspark.sql import SparkSession
 
 class DLTPipelineManager():
     """ Delta Live Tables Pipeline Manager """
 
     def __init__(
         self,
-        spark,
+        spark: SparkSession,
         dbutils,
-        source_system,
-        source_class,
-        catalog,
-        tags = None,
-        continuous_workflow = False,
-        serverless = False,
-        databricks_token = None,
-        databricks_host = None,
-        source_path = None,
+        source_system: str,
+        source_class: str,
+        catalog: str,
+        tags: dict = None,
+        continuous_workflow: bool = False,
+        serverless: bool = False,
+        databricks_token: str = None,
+        databricks_host: str = None,
+        source_path: str = None,
         ):
 
         self.spark = spark
@@ -60,13 +61,14 @@ class DLTPipelineManager():
 
     def help(self):
         print("This module manages a DLT pipeline")
-        print("create_or_update() -> Create or updates a DLT pipeline")
+        print("create_or_update() -> Creates or updates a DLT pipeline")
         print("start() -> Starts a DLT pipeline")
         print("stop() -> Stops a DLT pipeline")
 
     def create_or_update(
         self,
         ):
+        """Creates or updates a DLT pipeline"""
         try:
             workflow_settings = self._compose_settings(
                 continuous_workflow=self.continuous_workflow,
@@ -91,11 +93,13 @@ class DLTPipelineManager():
             return
 
     def start(self):
+        """Starts a DLT pipeline"""
         print(f"Starting pipeline {self.source_system}-{self.source_class}")
         pipeline_id = self._get_id()
         self._refresh(pipeline_id=pipeline_id)
 
     def stop(self):
+        """Stops a DLT pipeline"""
         print(f"Stopping pipeline {self.source_system}-{self.source_class}")
         pipeline_id = self._get_id()
         self._stop(pipeline_id=pipeline_id)

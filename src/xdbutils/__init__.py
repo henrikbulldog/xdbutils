@@ -10,7 +10,7 @@ from xdbutils.deprecation import deprecated
 from xdbutils.deprecation import deprecated
 
 class XDBUtils():
-    """ Extended Databricks Utilities """
+    """ This class exposes a collection of utilities for building enterprise data pipelines """
 
     def __init__(self, spark, dbutils):
         self.spark = spark
@@ -29,11 +29,11 @@ class XDBUtils():
         return self._transforms
 
     def help(self):
-        print("This module exposes a collection of utilities for building enterprise data pipelines")
-        print("create_dlt_pipeline_source(source_system, source_class, raw_base_path, tags): DLTPipelineSource -> Create a class with Delta Live Tables source functions")
-        print("create_dlt_pipeline_manager(source_system, source_class, catalog, tags, continuous_workflow, serverless, databricks_token, databricks_host): DLTPipelineManager -> Create a Delta Live Table pipeline manager")
-        print("create_dlt_data_manager(catalog, source_system, source_class, tags, continuous_workflow, databricks_token, databricks_host, source_path): DLTPipelineDataManager -> Create a Delta Live Tables data manager")
-        print("create_datalakehouse(raw_path, bronze_path, silver_path, gold_path): DataLakeHouse -> Create a class with utility functions for a Data Lakehouse data pipeline")
+        print("This class exposes a collection of utilities for building enterprise data pipelines")
+        print("create_dlt_pipeline_source(): DLTPipelineSource -> Creates a class with Delta Live Tables source functions")
+        print("create_dlt_pipeline_manager(): DLTPipelineManager -> Creates a Delta Live Table pipeline manager")
+        print("create_dlt_data_manager(): DLTPipelineDataManager -> Creates a Delta Live Tables data manager")
+        print("create_datalakehouse(): DataLakeHouse -> Create a class with utility functions for a Data Lakehouse data pipeline")
         print("fs: FileSystem -> File system utilities")
         print("transforms: Transforms -> Useful transforms")
 
@@ -47,6 +47,7 @@ class XDBUtils():
         raw_base_path,
         tags = None,
         ):
+        """Creates a class with Delta Live Tables source functions"""
 
         return DLTPipelineSource(
             spark=self.spark,
@@ -69,6 +70,7 @@ class XDBUtils():
         databricks_host = None,
         source_path = None,
         ):
+        """Creates a Delta Live Table pipeline manager"""
 
         return DLTPipelineManager(
             spark=self.spark,
@@ -95,6 +97,7 @@ class XDBUtils():
         databricks_host = None,
         source_path = None,
         ):
+        """Creates a Delta Live Tables data manager"""
 
         return DLTPipelineDataManager(
             spark=self.spark,

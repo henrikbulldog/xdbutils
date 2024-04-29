@@ -6,16 +6,17 @@ from xdbutils.pipelines.management import DLTPipelineManager
 class DLTPipelineDataManager(DLTPipelineManager):
     def help(self):
         print("Delta Live Tables data manager")
-        print("delete_persons(id_column, ids) -> Delete personally identifiable data from a Delta Live Table pipeline")
-        print("expose_tables(silver_catalog, gold_catalog) -> Expose silver and gold tables as views in another catalog")
-        print("backup_bronze(source_class) -> Expose silver and gold tables as views in another catalog")
-        print("ingest_historical(input_location, input_format, source_class) -> Copy historical data from external location to raw hsitorical folder")
+        print("delete_persons() -> Delete personally identifiable data from a Delta Live Table pipeline")
+        print("expose_tables() -> Expose silver and gold tables as views in another catalog")
+        print("backup_bronze() -> Expose silver and gold tables as views in another catalog")
+        print("ingest_historical() -> Copy historical data from external location to raw hsitorical folder")
 
     def delete_persons(
         self,
-        id_column,
-        ids,
+        id_column: str,
+        ids: list[str],
     ):
+        """Delete personally identifiable data from a Delta Live Table pipeline"""
         pipeline_id = self._get_id()
         assert pipeline_id, f"Pipeline {self.source_system}-{self.source_class} not found"
 
@@ -90,11 +91,18 @@ class DLTPipelineDataManager(DLTPipelineManager):
                     df.where(col(id_column).isin(ids)).count() == 0
                 ), f"{table} contains {id_column} in {ids}"
 
-    def expose_tables(self, silver_catalog, gold_catalog):
+    def expose_tables(
+        self,
+        silver_catalog: str,
+        gold_catalog: str,
+        ):
+        """Expose silver and gold tables as views in another catalog"""
+
         schemas = [r[0] for r in (
                    self.spark.sql(f"show schemas in {self.catalog}")
                    .select("databaseName"))
                    .collect()]
+
         for schema in schemas:
             tables = [r[0] for r in (
                 self.spark.sql(f"show tables in {self.catalog}.{schema}")
@@ -120,7 +128,9 @@ class DLTPipelineDataManager(DLTPipelineManager):
                         from {self.catalog}.{schema}.{table}
                         """)
 
-    def backup_bronze(self, source_class = None):
+    def backup_bronze(self, source_class: str = None):
+        """Expose silver and gold tables as views in another catalog"""
+
         if not source_class:
             source_class = self.source_class
         
@@ -142,10 +152,12 @@ class DLTPipelineDataManager(DLTPipelineManager):
 
     def ingest_historical(
         self,
-        input_location,
-        input_format = "parquet",
-        source_class = None,
+        input_location: str,
+        input_format: str = "parquet",
+        source_class: str = None,
         ):
+        """Copy historical data from external location to raw hsitorical folder"""
+
         if not source_class:
             source_class = f"{self.source_class}_historical"
 
