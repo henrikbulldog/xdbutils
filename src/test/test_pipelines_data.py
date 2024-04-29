@@ -27,7 +27,6 @@ class DLTPipelineManagerTestCase(unittest.TestCase):
                 "cost_center": "123456",
                 "documentation": "https://github.com/henrikbulldog/xdbutils"
             },
-            create_or_update=False,
             )
 
         self.assertIsNotNone(pipeline)
@@ -48,7 +47,6 @@ class DLTPipelineManagerTestCase(unittest.TestCase):
                 "documentation": "https://github.com/henrikbulldog/xdbutils"
             },
             continuous_workflow=True,
-            create_or_update=False,
             )
 
         self.assertIsNotNone(pipeline)

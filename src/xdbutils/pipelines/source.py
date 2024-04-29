@@ -28,7 +28,7 @@ class DLTPipelineSource():
         dbutils,
         source_system,
         source_class,
-        raw_base_path = None,
+        raw_base_path,
         tags = None,
         ):
 

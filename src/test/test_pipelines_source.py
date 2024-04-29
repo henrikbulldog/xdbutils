@@ -3,7 +3,7 @@
 import unittest
 from databricks.connect import DatabricksSession
 from databricks.sdk import WorkspaceClient
-from xdbutils.pipelines.source import DLTPipeline
+from xdbutils.pipelines.source import DLTPipelineSource
 
 
 spark = DatabricksSession.builder.getOrCreate()
@@ -17,24 +17,22 @@ class DLTPipelineTestCase(unittest.TestCase):
     def test_create_file_pipeline(self):
         """ Test create file pipeline """
 
-        pipeline = DLTPipeline(
+        pipeline = DLTPipelineSource(
             spark=spark,
             dbutils=dbutils,
             source_system="testcdc",
-            entity="employee",
-            catalog="testing_dlt",
+            source_class="employee",
+            raw_base_path="...",
             tags={
                 "data_owner": "Henrik Thomsen",
                 "cost_center": "123456",
                 "documentation": "https://github.com/henrikbulldog/xdbutils"
             },
-            create_or_update=False,
             )
 
         self.assertIsNotNone(pipeline)
 
         pipeline.raw_to_bronze(
-            raw_base_path="...",
             raw_format="json"
             )
 
@@ -58,19 +56,17 @@ class DLTPipelineTestCase(unittest.TestCase):
     def test_create_event_pipeline(self):
         """ Test create event pipeline """
 
-        pipeline = DLTPipeline(
+        pipeline = DLTPipelineSource(
             spark=spark,
             dbutils=dbutils,
             source_system="testcdc",
             source_class="employee",
-            catalog="testing_dlt",
+            raw_base_path="...",
             tags={
                 "data_owner": "Henrik Thomsen",
                 "cost_center": "123456",
                 "documentation": "https://github.com/henrikbulldog/xdbutils"
             },
-            continuous_workflow=True,
-            create_or_update=False,
             )
 
         self.assertIsNotNone(pipeline)
