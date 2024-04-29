@@ -12,14 +12,12 @@ class DLTPipelineManager():
         source_system,
         source_class,
         catalog,
-        raw_base_path = None,
         tags = None,
         continuous_workflow = False,
         serverless = False,
         databricks_token = None,
         databricks_host = None,
         source_path = None,
-        create_or_update = True,
         ):
 
         self.spark = spark
@@ -28,7 +26,6 @@ class DLTPipelineManager():
         self.source_path = source_path
         self.source_class = source_class
         self.catalog = catalog
-        self.raw_base_path = raw_base_path
         self.continuous_workflow = continuous_workflow
         self.serverless = serverless
         self.tags = tags
@@ -61,14 +58,15 @@ class DLTPipelineManager():
         self.tags["Source system"] = self.source_system
         self.tags["source_class"] = self.source_class
 
-        if create_or_update:
-            self.create_or_update()
+    def help():
+        print("This module manages a DLT pipeline")
+        print("create_or_update() -> Create or updates a DLT pipeline")
+        print("start() -> Starts a DLT pipeline")
+        print("stop() -> Stops a DLT pipeline")
 
     def create_or_update(
         self,
         ):
-        """ Create Delta Live Tables Workflow """
-
         try:
             workflow_settings = self._compose_settings(
                 continuous_workflow=self.continuous_workflow,

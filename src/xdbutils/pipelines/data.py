@@ -4,7 +4,12 @@ from pyspark.sql.functions import col
 from xdbutils.pipelines.management import DLTPipelineManager
 
 class DLTPipelineDataManager(DLTPipelineManager):
-    """ Delta Live Tables Pipeline Data Manager """
+    def help():
+        print("Delta Live Tables data manager")
+        print("delete_persons(id_column, ids) -> Delete personally identifiable data from a Delta Live Table pipeline")
+        print("expose_tables(silver_catalog, gold_catalog) -> Expose silver and gold tables as views in another catalog")
+        print("backup_bronze(source_class) -> Expose silver and gold tables as views in another catalog")
+        print("ingest_historical(input_location, input_format, source_class) -> Copy historical data from external location to raw hsitorical folder")
 
     def delete_persons(
         self,
@@ -85,10 +90,7 @@ class DLTPipelineDataManager(DLTPipelineManager):
                     df.where(col(id_column).isin(ids)).count() == 0
                 ), f"{table} contains {id_column} in {ids}"
 
-
     def expose_tables(self, silver_catalog, gold_catalog):
-        """ Expose DLT silver and gold tables from DLT catalog to other catalogs. """
-
         schemas = [r[0] for r in (
                    self.spark.sql(f"show schemas in {self.catalog}")
                    .select("databaseName"))
@@ -118,20 +120,13 @@ class DLTPipelineDataManager(DLTPipelineManager):
                         from {self.catalog}.{schema}.{table}
                         """)
 
-    def backup_bronze(self, data_type = None, environment = None,
-        ):
-        """ Backup bronze data """
-        if data_type:
-            warnings.warn("Parameter data_type is deprecated",
-                category=DeprecationWarning,
-                stacklevel=2)
-        if environment:
-            warnings.warn("Parameter environment is deprecated",
-                category=DeprecationWarning,
-                stacklevel=2)
-        input_table = f"{self.catalog}.{self.source_system}.bronze_{self.source_class}"
+    def backup_bronze(self, source_class = None):
+        if not source_class:
+            source_class = self.source_class
+        
+        input_table = f"{self.catalog}.{self.source_system}.bronze_{source_class}"
         ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        backup_path = f"{self.raw_base_path}/backup/{ts}/{self.source_system}/{self.source_class}"
+        backup_path = f"{self.raw_base_path}/backup/{ts}/{self.source_system}/{source_class}"
         print(f"Writing {input_table} to {backup_path}")
         bronze_df = self.spark.sql(f"select * from {input_table}")
         (
@@ -147,24 +142,14 @@ class DLTPipelineDataManager(DLTPipelineManager):
 
     def ingest_historical(
         self,
-        data_type = None,
-        environment = None,
-        input_location = None,
-        input_format = "parquet"
+        input_location,
+        input_format = "parquet",
+        source_class = None,
         ):
-        """ Ingest historical data """
-        if data_type:
-            warnings.warn("Parameter data_type is deprecated",
-                category=DeprecationWarning,
-                stacklevel=2)
-        if environment:
-            warnings.warn("Parameter environment is deprecated",
-                category=DeprecationWarning,
-                stacklevel=2)
-        if not input_location:
-            raise Exception("input_location must be psecified")
+        if not source_class:
+            source_class = f"{self.source_class}_historical"
 
-        target_location = f"{self.raw_base_path}/{self.source_system}/{self.source_class}_historical"
+        target_location = f"{self.raw_base_path}/{self.source_system}/{source_class}"
         print(f"Adding {input_location} to {target_location}")
         input_df = self.spark.read.format(input_format).load(input_location)
         (

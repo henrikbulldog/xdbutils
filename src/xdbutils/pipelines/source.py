@@ -19,16 +19,43 @@ from typing import Callable
 import warnings
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, current_timestamp, expr, lit
-from xdbutils.pipelines.management import DLTPipelineManager
 
-class DLTPipeline(DLTPipelineManager):
-    """Delta Live Tables Pipeline"""
+class DLTPipelineSource():
+
+    def __init__(
+        self,
+        spark,
+        dbutils,
+        source_system,
+        source_class,
+        raw_base_path = None,
+        tags = None,
+        ):
+
+        self.spark = spark
+        self.dbutils = dbutils
+        self.source_system = source_system
+        self.source_class = source_class
+        self.raw_base_path = raw_base_path
+        self.tags = tags
+
+        if not self.tags:
+            self.tags = {}
+        self.tags["Source system"] = self.source_system
+        self.tags["source_class"] = self.source_class
+
+    def help():
+        print("This class contains typical source functions for a DLT pipeline")
+        print("raw_to_bronze(raw_format, source_class, target_class, options, schema, parse, partition_cols, expectations) -> Ingest data from a raw folder to a streaming table using Auto Loader")
+        print("event_to_bronze(eventhub_namespace, eventhub_group_id, eventhub_name, client_id, client_secret, azure_tenant_id, eventhub_connection_string, max_offsets_per_trigger, starting_offsets, target_class, parse, partition_cols, expectations) -> Ingest data from an Event Hub to a streaming table")
+        print("bronze_to_silver_append(source_classes, target_class, parse, partition_cols, expectations) -> Append data from one or more bronze tables to a silver table")
+        print("bronze_to_silver_upsert(keys, sequence_by, source_classes, target_class, ignore_null_updates, apply_as_deletes, apply_as_truncates, column_list, except_column_list, parse, partition_cols, expectations) -> Upsert data from one or more bronze tables to a silver table")
+        print("bronze_to_silver_track_changes(keys, sequence_by, source_classes, target_class, ignore_null_updates, apply_as_deletes, apply_as_truncates, column_list, except_column_list, track_history_column_list, track_history_except_column_list, parse, partition_cols, expectations) -> Track changes in data from one or more bronze tables to a silver table")
+        print("silver_to_gold(name, source_classes, target_class, parse, expectations)")
 
     def raw_to_bronze(
         self,
-        data_type = None,
-        environment = None,
-        raw_format = None,
+        raw_format,
         source_class = None,
         target_class = None,
         options = None,
@@ -39,16 +66,6 @@ class DLTPipeline(DLTPipelineManager):
         ):
         """ Raw to bronze """
 
-        if data_type:
-            warnings.warn("Parameter data_type is deprecated",
-                category=DeprecationWarning,
-                stacklevel=2)
-        if environment:
-            warnings.warn("Parameter environment is deprecated",
-                category=DeprecationWarning,
-                stacklevel=2)
-        if not raw_format:
-            raise Exception("Raw format must be specified")
         if not source_class:
             source_class = self.source_class
         if not target_class:
@@ -115,7 +132,6 @@ class DLTPipeline(DLTPipelineManager):
         partition_cols = None,
         expectations = None,
     ):
-        """ Event to bronze """
 
         if not max_offsets_per_trigger:
             max_offsets_per_trigger = "600"
@@ -185,7 +201,6 @@ class DLTPipeline(DLTPipelineManager):
         partition_cols = None,
         expectations = None,
         ):
-        """ Bronze to Silver, append only """
 
         if not partition_cols:
             partition_cols = []
@@ -246,7 +261,6 @@ class DLTPipeline(DLTPipelineManager):
         partition_cols = None,
         expectations = None,
         ):
-        """ Bronze to Silver, upsert """
 
         if not partition_cols:
             partition_cols = []
@@ -399,7 +413,6 @@ class DLTPipeline(DLTPipelineManager):
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
         expectations = None
         ):
-        """ Bronze to Silver """
 
         if not source_classes:
             source_classes = [self.source_class]
