@@ -169,7 +169,7 @@ class DLTPipelineSource():
             kafka_options["kafka.sasl.login.callback.handler.class"] = "kafkashaded.org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler"
             kafka_options["kafka.sasl.oauthbearer.token.endpoint.url"] = f"https://login.microsoft.com/{azure_tenant_id}/oauth2/v2.0/token"
 
-        @dlt.create_table(
+        @dlt.table(
             comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
             name=f"bronze_{target_class}",
             table_properties={
