@@ -1,3 +1,5 @@
+"""Typical source functions for a DLT pipeline"""
+
 try:
     import dlt  # type: ignore
 except:  # pylint: disable=bare-except
@@ -20,7 +22,7 @@ from pyspark.sql import DataFrame
 from pyspark.sql import Column
 from pyspark.sql.functions import col, current_timestamp, expr, lit
 
-class DLTPipelineSource():
+class DLTPipeline():
     """class contains typical source functions for a DLT pipeline"""
 
     def __init__(
@@ -45,7 +47,9 @@ class DLTPipelineSource():
         self.tags["Source system"] = self.source_system
         self.tags["source_class"] = self.source_class
 
+
     def help(self):
+        """Help"""
         print("This class contains typical source functions for a DLT pipeline")
         print("raw_to_bronze() -> Ingest data from a raw folder to a streaming table using Auto Loader")
         print("event_to_bronze() -> Ingest data from an Event Hub to a streaming table")
@@ -53,6 +57,7 @@ class DLTPipelineSource():
         print("bronze_to_silver_upsert() -> Upsert data from one or more bronze tables to a silver table")
         print("bronze_to_silver_track_changes() -> Track changes in data from one or more bronze tables to a silver table")
         print("silver_to_gold() -> Ingest data from one or more silver tables to a gold table")
+
 
     def raw_to_bronze(
         self,
@@ -116,6 +121,7 @@ class DLTPipelineSource():
                 result_df = result_df.withColumn("_quarantined", expr(quarantine_rules))
 
             return result_df
+
 
     def event_to_bronze(
         self,
@@ -195,6 +201,7 @@ class DLTPipelineSource():
 
             return result_df
 
+
     def bronze_to_silver_append(
         self,
         source_classes: str = None,
@@ -249,6 +256,7 @@ class DLTPipelineSource():
 
             return silver_df
 
+
     def bronze_to_silver_upsert(
         self,
         keys: list[str],
@@ -302,7 +310,7 @@ class DLTPipelineSource():
                 silver_df = silver_df.drop("_rescued_data")
 
             return silver_df
-        
+
         dlt.create_streaming_table(
             name=f"silver_{target_class}",
             comment=", ".join([f"{e}: {self.tags[e]}" for e in self.tags.keys()]),
@@ -323,6 +331,7 @@ class DLTPipelineSource():
             column_list=column_list,
             except_column_list=except_column_list,
             )
+
 
     def bronze_to_silver_track_changes(
         self,
@@ -409,6 +418,7 @@ class DLTPipelineSource():
             track_history_except_column_list=track_history_except_column_list
             )
 
+
     def silver_to_gold(
         self,
         name: str,
@@ -448,10 +458,12 @@ class DLTPipelineSource():
                 gold_df.transform(parse)
             )
 
+
     def __union_streams(self, sources):
         source_tables = [dlt.read_stream(t) for t in sources]
         unioned = reduce(lambda x, y: x.unionAll(y), source_tables)
         return unioned
+
 
     def __union_tables(self, sources):
         source_tables = [dlt.read(t) for t in sources]

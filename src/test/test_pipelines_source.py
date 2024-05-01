@@ -3,7 +3,7 @@
 import unittest
 from databricks.connect import DatabricksSession
 from databricks.sdk import WorkspaceClient
-from xdbutils.pipelines.source import DLTPipelineSource
+from xdbutils.pipelines.source import DLTPipeline
 
 
 spark = DatabricksSession.builder.getOrCreate()
@@ -17,7 +17,7 @@ class DLTPipelineTestCase(unittest.TestCase):
     def test_create_file_pipeline(self):
         """ Test create file pipeline """
 
-        pipeline = DLTPipelineSource(
+        pipeline = DLTPipeline(
             spark=spark,
             dbutils=dbutils,
             source_system="testcdc",
@@ -56,7 +56,7 @@ class DLTPipelineTestCase(unittest.TestCase):
     def test_create_event_pipeline(self):
         """ Test create event pipeline """
 
-        pipeline = DLTPipelineSource(
+        pipeline = DLTPipeline(
             spark=spark,
             dbutils=dbutils,
             source_system="testcdc",

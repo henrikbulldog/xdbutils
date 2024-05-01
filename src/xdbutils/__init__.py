@@ -3,10 +3,9 @@
 from pyspark.sql import DataFrame
 from xdbutils.datalakehouse import DataLakehouse
 from xdbutils.pipelines.management import DLTPipelineManager
-from xdbutils.pipelines.source import DLTPipelineSource
+from xdbutils.pipelines.source import DLTPipeline
 from xdbutils.pipelines.data import DLTPipelineDataManager
 from xdbutils.transforms import scd2
-from xdbutils.deprecation import deprecated
 from xdbutils.deprecation import deprecated
 
 class XDBUtils():
@@ -29,18 +28,22 @@ class XDBUtils():
         return self._transforms
 
     def help(self):
+        """Help"""
         print("This class exposes a collection of utilities for building enterprise data pipelines")
-        print("create_dlt_pipeline_source(): DLTPipelineSource -> Creates a class with Delta Live Tables source functions")
+        print("create_dlt_pipeline_source(): DLTPipeline -> Creates a class with Delta Live Tables source functions")
         print("create_dlt_pipeline_manager(): DLTPipelineManager -> Creates a Delta Live Table pipeline manager")
         print("create_dlt_data_manager(): DLTPipelineDataManager -> Creates a Delta Live Tables data manager")
         print("create_datalakehouse(): DataLakeHouse -> Create a class with utility functions for a Data Lakehouse data pipeline")
         print("fs: FileSystem -> File system utilities")
         print("transforms: Transforms -> Useful transforms")
 
+
     def create_datalakehouse(self, raw_path, bronze_path, silver_path, gold_path):
+        """ Create Data Lakehouse """
         return DataLakehouse(self.spark, raw_path, bronze_path, silver_path, gold_path)
 
-    def create_dlt_pipeline_source(
+
+    def create_dlt_pipeline(
         self,
         source_system,
         source_class,
@@ -49,7 +52,7 @@ class XDBUtils():
         ):
         """Creates a class with Delta Live Tables source functions"""
 
-        return DLTPipelineSource(
+        return DLTPipeline(
             spark=self.spark,
             dbutils=self.dbutils,
             source_system=source_system,
@@ -58,11 +61,13 @@ class XDBUtils():
             tags=tags,
             )
 
+
     def create_dlt_pipeline_manager(
         self,
         source_system,
         source_class,
         catalog,
+        name = None,
         tags = None,
         continuous_workflow = False,
         serverless = False,
@@ -78,6 +83,7 @@ class XDBUtils():
             source_system=source_system,
             source_class=source_class,
             catalog=catalog,
+            name=name,
             tags=tags,
             continuous_workflow=continuous_workflow,
             serverless=serverless,
@@ -86,11 +92,14 @@ class XDBUtils():
             source_path=source_path,
             )
 
+
     def create_dlt_data_manager(
         self,
+        source_system,
+        source_class,
         catalog,
-        source_system = None,
-        source_class = None,
+        raw_base_path,
+        name = None,
         tags = None,
         continuous_workflow = False,
         databricks_token = None,
@@ -100,18 +109,18 @@ class XDBUtils():
         """Creates a Delta Live Tables data manager"""
 
         return DLTPipelineDataManager(
-            spark=self.spark,
-            dbutils=self.dbutils,
-            source_system=source_system,
-            source_class=source_class,
-            catalog=catalog,
-            raw_base_path= None,
-            tags=tags,
-            continuous_workflow=continuous_workflow,
-            databricks_token=databricks_token,
-            databricks_host=databricks_host,
-            source_path=source_path,
-            create_or_update = False,
+            spark= self.spark,
+            dbutils= self.dbutils,
+            source_system= source_system,
+            source_class= source_class,
+            catalog= catalog,
+            raw_base_path= raw_base_path,
+            name= name,
+            tags= tags,
+            continuous_workflow= continuous_workflow,
+            databricks_token= databricks_token,
+            databricks_host= databricks_host,
+            source_path= source_path,
             )
 
 

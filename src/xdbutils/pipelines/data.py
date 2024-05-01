@@ -1,14 +1,55 @@
+"""Delta Live Tables data manager"""
+
 from datetime import datetime
+from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 from xdbutils.pipelines.management import DLTPipelineManager
 
 class DLTPipelineDataManager(DLTPipelineManager):
+    """Delta Live Tables data manager"""
+
+    def __init__(
+        self,
+        spark: SparkSession,
+        dbutils,
+        source_system: str,
+        source_class: str,
+        catalog: str,
+        raw_base_path,
+        name: str = None,
+        tags: dict = None,
+        continuous_workflow: bool = False,
+        serverless: bool = False,
+        databricks_token: str = None,
+        databricks_host: str = None,
+        source_path: str = None,
+        ):
+
+        super().__init__(
+            spark=spark,
+            dbutils=dbutils,
+            source_system=source_system,
+            source_class=source_class,
+            catalog=catalog,
+            name=name,
+            tags=tags,
+            continuous_workflow=continuous_workflow,
+            serverless=serverless,
+            databricks_token=databricks_token,
+            databricks_host=databricks_host,
+            source_path=source_path,
+        )
+        self.raw_base_path = raw_base_path
+
+
     def help(self):
+        """Help"""
         print("Delta Live Tables data manager")
         print("delete_persons() -> Delete personally identifiable data from a Delta Live Table pipeline")
         print("expose_tables() -> Expose silver and gold tables as views in another catalog")
         print("backup_bronze() -> Expose silver and gold tables as views in another catalog")
         print("ingest_historical() -> Copy historical data from external location to raw hsitorical folder")
+
 
     def delete_persons(
         self,
@@ -17,17 +58,17 @@ class DLTPipelineDataManager(DLTPipelineManager):
     ):
         """Delete personally identifiable data from a Delta Live Table pipeline"""
         pipeline_id = self._get_id()
-        assert pipeline_id, f"Pipeline {self.source_system}-{self.source_class} not found"
+        assert pipeline_id, f"Pipeline {self.name} not found"
 
         update_id = self._get_latest_update(
             pipeline_id=pipeline_id,
         )
-        assert update_id, f"Pipeline {self.source_system}-{self.source_class}: latest update not found"
+        assert update_id, f"Pipeline {self.name}: latest update not found"
 
         save_continuous_workflow = self.continuous_workflow
         if self.continuous_workflow:
             self._stop(pipeline_id=pipeline_id)
-            print(f"Stopping pipeline {self.source_system}-{self.source_class} and setting pipeline mode to triggered instead of continuous")
+            print(f"Stopping pipeline {self.name} and setting pipeline mode to triggered instead of continuous")
             self.continuous_workflow = False
             self.create_or_update()
 
@@ -35,7 +76,7 @@ class DLTPipelineDataManager(DLTPipelineManager):
             pipeline_id=pipeline_id,
             update_id=update_id,
         )
-        assert datasets, f"Pipeline {self.source_system}-{self.source_class}: cannot find datasets"
+        assert datasets, f"Pipeline {self.name}: cannot find datasets"
 
         ids_string = ",".join([f"'{id}'" for id in ids])
         refresh_tables = []
@@ -70,14 +111,14 @@ class DLTPipelineDataManager(DLTPipelineManager):
             print(f"Column {id_column} not found in bronze or silver tables.")
 
         if len(refresh_tables) > 0:
-            print(f"Running pipeline {self.source_system}-{self.source_class} with full refresh of: {', '.join(refresh_tables)}")
+            print(f"Running pipeline {self.name} with full refresh of: {', '.join(refresh_tables)}")
             self._refresh(
                 pipeline_id=pipeline_id,
                 full_refresh_selection=refresh_tables,
             )
 
         if self.continuous_workflow != save_continuous_workflow:
-            print(f"Updating pipeline {self.source_system}-{self.source_class}, setting pipeline mode back to continuous")
+            print(f"Updating pipeline {self.name}, setting pipeline mode back to continuous")
             self.continuous_workflow = save_continuous_workflow
             self.create_or_update()
 
@@ -89,6 +130,7 @@ class DLTPipelineDataManager(DLTPipelineManager):
                 assert (
                     df.where(col(id_column).isin(ids)).count() == 0
                 ), f"{table} contains {id_column} in {ids}"
+
 
     def expose_tables(
         self,
@@ -127,12 +169,13 @@ class DLTPipelineDataManager(DLTPipelineManager):
                         from {self.catalog}.{schema}.{table}
                         """)
 
+
     def backup_bronze(self, source_class: str = None):
         """Expose silver and gold tables as views in another catalog"""
 
         if not source_class:
             source_class = self.source_class
-        
+
         input_table = f"{self.catalog}.{self.source_system}.bronze_{source_class}"
         ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         backup_path = f"{self.raw_base_path}/backup/{ts}/{self.source_system}/{source_class}"
@@ -148,6 +191,7 @@ class DLTPipelineDataManager(DLTPipelineManager):
             .parquet(backup_path)
         )
         return backup_path
+
 
     def ingest_historical(
         self,

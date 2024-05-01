@@ -27,6 +27,8 @@ class DLTPipelineManagerTestCase(unittest.TestCase):
                 "cost_center": "123456",
                 "documentation": "https://github.com/henrikbulldog/xdbutils"
             },
+            databricks_host="...",
+            source_path="...",
             )
 
         self.assertIsNotNone(pipeline)
@@ -47,6 +49,8 @@ class DLTPipelineManagerTestCase(unittest.TestCase):
                 "documentation": "https://github.com/henrikbulldog/xdbutils"
             },
             continuous_workflow=True,
+            databricks_host="...",
+            source_path="...",
             )
 
         self.assertIsNotNone(pipeline)

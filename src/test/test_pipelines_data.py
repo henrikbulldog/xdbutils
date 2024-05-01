@@ -22,11 +22,14 @@ class DLTPipelineManagerTestCase(unittest.TestCase):
             source_system="testcdc",
             source_class="employee",
             catalog="testing_dlt",
+            raw_base_path= "...",
             tags={
                 "data_owner": "Henrik Thomsen",
                 "cost_center": "123456",
                 "documentation": "https://github.com/henrikbulldog/xdbutils"
             },
+            databricks_host="...",
+            source_path="...",
             )
 
         self.assertIsNotNone(pipeline)
@@ -41,12 +44,15 @@ class DLTPipelineManagerTestCase(unittest.TestCase):
             source_system="testcdc",
             source_class="employee",
             catalog="testing_dlt",
+            raw_base_path= "...",
             tags={
                 "data_owner": "Henrik Thomsen",
                 "cost_center": "123456",
                 "documentation": "https://github.com/henrikbulldog/xdbutils"
             },
             continuous_workflow=True,
+            databricks_host="...",
+            source_path="...",
             )
 
         self.assertIsNotNone(pipeline)
