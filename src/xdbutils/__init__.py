@@ -30,7 +30,7 @@ class XDBUtils():
     def help(self):
         """Help"""
         print("This class exposes a collection of utilities for building enterprise data pipelines")
-        print("create_dlt_pipeline_source(): DLTPipeline -> Creates a class with Delta Live Tables source functions")
+        print("create_dlt_pipeline(): DLTPipeline -> Creates a class with Delta Live Tables source functions")
         print("create_dlt_pipeline_manager(): DLTPipelineManager -> Creates a Delta Live Table pipeline manager")
         print("create_dlt_data_manager(): DLTPipelineDataManager -> Creates a Delta Live Tables data manager")
         print("create_datalakehouse(): DataLakeHouse -> Create a class with utility functions for a Data Lakehouse data pipeline")

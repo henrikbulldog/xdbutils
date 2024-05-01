@@ -9,16 +9,14 @@ The package is built for Databricks runtime 13.0 or higher.
 Table of contents:
 - [Installing the library in a Databricks notebook](#installing-the-library-in-a-databricks-notebook)
 - [Using the Delta Live Tables (DLT) Framework](#using-the-delta-live-tables-dlt-framework)
-  * [Create a Delta Live Tables Pipeline](#create-a-delta-live-tables-pipeline)
   * [File-based batch ingestion](#file-based-batch-ingestion)
     + [Create Test Data](#create-test-data)
-    + [Create a DLT Source class](#create-a-dlt-source-class)
+    + [Create a DLT Pipeline Object](#create-a-dlt-pipeline-object)
     + [Raw to Bronze](#raw-to-bronze)
     + [Bronze to Silver with Upsert](#bronze-to-silver-with-upsert)
     + [Bronze to Silver with Change Tracking](#bronze-to-silver-with-change-tracking)
     + [Silver to Gold](#silver-to-gold)
   * [Event-Based Ingestion](#event-based-ingestion)
-    + [Create a DLT Pipeline in Continous Mode](#create-a-dlt-pipeline-in-continous-mode)
     + [Event to Bronze](#event-to-bronze)
     + [Bronze to Silver with Append Only](#bronze-to-silver-with-append-only)
 - [Using the Data Lakehouse Framework (straight up python)](#using-the-data-lakehouse-framework)
@@ -36,87 +34,6 @@ Just pip install directly from the repo:
 
 # Using the Delta Live Tables (DLT) Framework
 In order to set up a Delta Live Tables pipeline, simply create a python notebook in Databricks and the method XDBUtils.create_dlt_pipeline().
-
-## Create a Delta Live Tables Pipeline
-XDBUtils.create_dlt_pipeline_manager() returns a DLT pipeline manager class. The method create_or_update() will create or update a DLT workflow, the workflow will be named `<source_system>-<source_class>`.
-
-```python
-from xdbutils import XDBUtils
-
-xdbutils = XDBUtils(spark, dbutils)
-
-pipeline_mgr = xdbutils.create_dlt_pipeline_manager(
-  source_system="demo",
-  source_class="employee",
-  catalog="testing_dlt",
-  tags={
-    "data_owner": "Henrik Thomsen",
-    "cost_center": "123456",
-    "documentation": "https://github.com/henrikbulldog/xdbutils"
-  },
-  databricks_token=dbutils.secrets().get(scope="...", key="...")
-)
-
-pipeline_mgr.create_or_update()
-
-pipeline_mgr.start()
-```
-
-XDBUtils.create_dlt_pipeline_manager() parameters:
-
-|Parameter|Description|
-|---------|-----------|
-|**source_system**|Source system, this name will be used to create a schema in Unity Catalog|
-|**source_class**|Source class or entity name, this name will be used to create tabnles and views in Unity Catalog|
-|**catalog**|Name of Unity Catalog to use|
-|tags|Tags will be added to the DTL workflow configuration and to Delta table description in Data Explorer|
-|continuous_workflow|If true: Run DLT workflow in continuous mode, if false: run the workflow scheduled. Default: false|
-|serverless|Run the DLT pipeline in serverless mode. Default: false|
-|databricks_token|A Databricks access token for [authentication to the Databricks API](https://docs.databricks.com/en/dev-tools/auth.html#databricks-personal-access-token-authentication)|
-|databricks_host|If omitted, the framework will get the host from the calling notebook context|
-|source_path|If omitted, the framework will use the path to the calling notebook|
-
-The code above will create a DLT workflow with this definition:
-
-```json
-{
-    "id": "...",
-    "pipeline_type": "WORKSPACE",
-    "clusters": [
-        {
-            "label": "default",
-            "autoscale": {
-                "min_workers": 1,
-                "max_workers": 2,
-                "mode": "ENHANCED"
-            }
-        }
-    ],
-    "development": true,
-    "continuous": false,
-    "channel": "PREVIEW",
-    "libraries": [
-        {
-            "notebook": {
-                "path": ".../DLT/demo/employee/dlt_demo_employee"
-            }
-        }
-    ],
-    "name": "demo-employee",
-    "serverless": false,
-    "edition": "ADVANCED",
-    "catalog": "testing_dlt",
-    "configuration": {
-        "pipelines.enableTrackHistory": "true",
-        "data_owner": "Henrik Thomsen",
-        "cost_center": "123456",
-        "documentation": "https://github.com/henrikbulldog/xdbutils",
-        "Source system": "demo",
-        "Source class": "employee"
-    },
-    "target": "demo"
-}
-```
 
 ## File-based batch ingestion
 This section shows how to set up a pipeline for ingesting files that is scheduled to run at intervals. Only newly arrived files are processed (DLT uses AutoLoader to kep track of new files).
@@ -219,8 +136,8 @@ Test data:
 +-----+--------+-----------+---------+--------------------------+
 ```
 
-### Create a DLT Source class
-Call XDBUtil.create_dlt_pipeline_source() to get a class with DLT source functions. Parameters:
+### Create a DLT Pipeline Object
+Call XDBUtil.create_dlt_pipeline() to get a class with DLT source functions. Parameters:
 
 |Parameter|Description|
 |---------|-----------|
@@ -253,8 +170,8 @@ In order to ingest data from raw to bronze, call raw_to_bronze() with parameters
 |Parameter|Description|
 |---------|-----------|
 |**raw_format**|Raw data format; json, csv, parquet|
-|source_system|Source system, this name will be used to create a schema in Unity Catalog, default: as specified in create_dlt_pipeline_source()|
-|source_class|Source class or entity name, this name will be used to create tabnles and views in Unity Catalog, default: as specified in create_dlt_pipeline_source()|
+|source_system|Source system, this name will be used to create a schema in Unity Catalog, default: as specified in create_dlt_pipeline()|
+|source_class|Source class or entity name, this name will be used to create tabnles and views in Unity Catalog, default: as specified in create_dlt_pipeline()|
 |target_class|Name of the target streaming table: bronze_<target_class>, default = source_class|
 |options|Read options, i.e. {"header": True}|
 |schema|Schema to be used for reading|
@@ -298,7 +215,7 @@ Bronze metadata columns:
 |_quarantined|False if expectations are met, True if not|
 
 ### Bronze to Silver with Upsert
-[Create a DLT Source class](#create-a-dlt-source-class). Call bronze_to_silver_upsert() with parameters (see also [DLT docs](https://docs.databricks.com/en/delta-live-tables/python-ref.html#change-data-capture-with-python-in-delta-live-tables)):
+[Create a DLT Pipeline Object](#create-a-dlt-pipeline-object). Call bronze_to_silver_upsert() with parameters (see also [DLT docs](https://docs.databricks.com/en/delta-live-tables/python-ref.html#change-data-capture-with-python-in-delta-live-tables)):
 
 |Parameter|Description|
 |---------|-----------|
@@ -339,7 +256,7 @@ This will create the table `<catalog>.<source system>.silver_<source class>`, fo
 ```
 
 ### Bronze to Silver with Change Tracking
-[Create a DLT Source class](#create-a-dlt-source-class). If you want to track changes to a slow changing dimension, call bronze_to_silver_track_changes() with parameters (see also [DLT docs](https://docs.databricks.com/en/delta-live-tables/python-ref.html#change-data-capture-with-python-in-delta-live-tables)):
+[Create a DLT Pipeline Object](#create-a-dlt-pipeline-object). If you want to track changes to a slow changing dimension, call bronze_to_silver_track_changes() with parameters (see also [DLT docs](https://docs.databricks.com/en/delta-live-tables/python-ref.html#change-data-capture-with-python-in-delta-live-tables)):
 
 |Parameter|Description|
 |---------|-----------|
@@ -384,7 +301,7 @@ This will create the table `<catalog>.<source system>.silver_<source class>_chan
 ```
 
 ### Silver to Gold
-[Create a DLT Source class](#create-a-dlt-source-class). Call silver_to_gold() with silver to gold transformation method, with parameters:
+[Create a DLT Pipeline Object](#create-a-dlt-pipeline-object). Call silver_to_gold() with silver to gold transformation method, with parameters:
 
 |Parameter|Description|
 |---------|-----------|
@@ -431,34 +348,8 @@ The resulting DLT workflow will look like this:
 
 ![clickstream workflow](clickstream_workflow.png)
 
-### Create a DLT Pipeline in Continous Mode
-XDBUtils.create_dlt_pipeline_manager() returns a DLT pipeline manager class. The method create_or_update() will create or update a DLT workflow, the workflow will be named `<source_system>-<source_class>`.
-
-```python
-from xdbutils import XDBUtils
-
-xdbutils = XDBUtils(spark, dbutils)
-
-pipeline_mgr = xdbutils.create_dlt_pipeline_manager(
-  source_system="demo",
-  source_class="clickstream",
-  catalog="testing_dlt",
-  tags={
-    "data_owner": "Henrik Thomsen",
-    "cost_center": "123456",
-    "documentation": "https://github.com/henrikbulldog/xdbutils"
-  },
-  continuous_workflow = True,
-  databricks_token=dbutils.secrets().get(scope="...", key="...")
-)
-
-pipeline_mgr.create_or_update()
-
-pipeline_mgr.start()
-```
-
 ### Event to Bronze
-[Create a DLT Source class](#create-a-dlt-source-class). In order to ingest data from an event hub to bronze, call event_to_bronze() with parameters:
+[Create a DLT Pipeline Object](#create-a-dlt-pipeline-object). In order to ingest data from an event hub to bronze, call event_to_bronze() with parameters:
 
 |Parameter|Description|
 |---------|-----------|
@@ -510,7 +401,7 @@ Bronze metadata columns:
 |_quarantined|False if expectations are met, True if not|
 
 ### Bronze to Silver with Append Only
-[Create a DLT Source class](#create-a-dlt-source-class). Call bronze_to_silver_append() with parameters:
+[Create a DLT Pipeline Object](#create-a-dlt-pipeline-object). Call bronze_to_silver_append() with parameters:
 
 |Parameter|Description|
 |---------|-----------|
