@@ -12,10 +12,10 @@ class DLTPipelineDataManager(DLTPipelineManager):
         self,
         spark: SparkSession,
         dbutils,
-        source_system: str,
-        source_class: str,
         catalog: str,
-        raw_base_path,
+        source_system: str = None,
+        source_class: str = None,
+        raw_base_path: str = None,
         name: str = None,
         tags: dict = None,
         continuous_workflow: bool = False,
@@ -57,6 +57,7 @@ class DLTPipelineDataManager(DLTPipelineManager):
         ids: list[str],
     ):
         """Delete personally identifiable data from a Delta Live Table pipeline"""
+
         pipeline_id = self._get_id()
         assert pipeline_id, f"Pipeline {self.name} not found"
 
