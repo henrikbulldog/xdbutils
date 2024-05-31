@@ -16,11 +16,11 @@ except:  # pylint: disable=bare-except
 
     dlt = MockDlt()
 
-from functools import reduce
+import functools
 from typing import Callable
-from pyspark.sql import DataFrame
-from pyspark.sql import Column
-from pyspark.sql.functions import col, current_timestamp, expr, lit
+import warnings
+from pyspark.sql import DataFrame, Column
+from pyspark.sql.functions import col, current_timestamp, expr, lit, concat_ws, sha2
 
 class DLTPipeline():
     """class contains typical source functions for a DLT pipeline"""
@@ -261,6 +261,7 @@ class DLTPipeline():
         self,
         keys: list[str],
         sequence_by: str,
+        hash_keys: bool = False,
         source_classes: list[str] = None,
         target_class: str = None,
         ignore_null_updates: bool = False,
@@ -273,6 +274,11 @@ class DLTPipeline():
         expectations: dict = None,
         ):
         """Upsert data from one or more bronze tables to a silver table"""
+
+        if keys and len(keys) > 1 and not hash_keys:
+            warnings.warn("Consider hashing the composite keys. Set hash_keys = True. Full resfresh may be needed.",
+                category=DeprecationWarning,
+                stacklevel=2)
 
         if not partition_cols:
             partition_cols = []
@@ -309,6 +315,9 @@ class DLTPipeline():
             if "_rescued_data" in silver_df.schema.fieldNames():
                 silver_df = silver_df.drop("_rescued_data")
 
+            if hash_keys:
+                silver_df = silver_df.withColumn("_hash_key", sha2(concat_ws("||", *keys), 256))
+
             return silver_df
 
         dlt.create_streaming_table(
@@ -323,7 +332,7 @@ class DLTPipeline():
         dlt.apply_changes(
             target=f"silver_{target_class}",
             source=f"view_silver_{target_class}",
-            keys=keys,
+            keys=["_hash_key"] if hash_keys else keys,
             sequence_by=col(sequence_by),
             ignore_null_updates=ignore_null_updates,
             apply_as_deletes=apply_as_deletes,
@@ -337,6 +346,7 @@ class DLTPipeline():
         self,
         keys: list[str],
         sequence_by: str,
+        hash_keys: bool = False,
         source_classes: list[str] = None,
         target_class: str = None,
         ignore_null_updates: bool = False,
@@ -352,6 +362,11 @@ class DLTPipeline():
         ):
         """ Track changes in data from one or more bronze tables to a silver table,
         see https://docs.databricks.com/en/delta-live-tables/cdc.html """
+
+        if keys and len(keys) > 1 and not hash_keys:
+            warnings.warn("Consider hashing the composite keys. Set hash_keys = True. Full resfresh may be needed.",
+                category=DeprecationWarning,
+                stacklevel=2)
 
         if not source_classes:
             source_classes = [self.source_class]
@@ -392,6 +407,9 @@ class DLTPipeline():
             if "_rescued_data" in silver_df.schema.fieldNames():
                 silver_df = silver_df.drop("_rescued_data")
 
+            if hash_keys:
+                silver_df = silver_df.withColumn("_hash_key", sha2(concat_ws("||", *keys), 256))
+
             return silver_df
 
         dlt.create_streaming_table(
@@ -406,7 +424,7 @@ class DLTPipeline():
         dlt.apply_changes(
             target=f"silver_{target_class}_changes",
             source=f"view_silver_{target_class}_changes",
-            keys=keys,
+            keys=["_hash_key"] if hash_keys else keys,
             sequence_by=col(sequence_by),
             stored_as_scd_type="2",
             ignore_null_updates=ignore_null_updates,
@@ -461,11 +479,11 @@ class DLTPipeline():
 
     def __union_streams(self, sources):
         source_tables = [dlt.read_stream(t) for t in sources]
-        unioned = reduce(lambda x, y: x.unionAll(y), source_tables)
+        unioned = functools.reduce(lambda x, y: x.unionAll(y), source_tables)
         return unioned
 
 
     def __union_tables(self, sources):
         source_tables = [dlt.read(t) for t in sources]
-        unioned = reduce(lambda x, y: x.unionAll(y), source_tables)
+        unioned = functools.reduce(lambda x, y: x.unionAll(y), source_tables)
         return unioned
