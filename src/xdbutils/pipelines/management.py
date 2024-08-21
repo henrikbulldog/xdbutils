@@ -86,7 +86,7 @@ class DLTPipelineManager():
             pipeline_id = self._get_id()
 
             if pipeline_id:
-                print(f"Updating pipeline {self.name}")
+                print(f"Updating pipeline {self.name}, id {pipeline_id}")
                 self._update(
                     pipeline_id=pipeline_id,
                     workflow_settings=workflow_settings,
@@ -214,7 +214,7 @@ class DLTPipelineManager():
             return
 
         i = 1
-        while i < 10:
+        while i < 60:
             i += 1
             time.sleep(10)
             progress = self._get_progress(

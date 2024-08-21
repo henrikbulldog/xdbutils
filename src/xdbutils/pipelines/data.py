@@ -112,7 +112,7 @@ class DLTPipelineDataManager(DLTPipelineManager):
             print(f"Column {id_column} not found in bronze or silver tables.")
 
         if len(refresh_tables) > 0:
-            print(f"Running pipeline {self.name} with full refresh of: {', '.join(refresh_tables)}")
+            print(f"Running pipeline {self.name} with partial refresh of: {', '.join(refresh_tables)}")
             self._refresh(
                 pipeline_id=pipeline_id,
                 full_refresh_selection=refresh_tables,

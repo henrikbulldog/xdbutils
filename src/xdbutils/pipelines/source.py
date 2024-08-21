@@ -33,6 +33,10 @@ class DLTPipeline():
         source_class,
         raw_base_path,
         tags = None,
+        eventhub_client_id: str = None,
+        eventhub_client_secret: str = None,
+        eventhub_azure_tenant_id: str = None,
+        eventhub_connection_string: str = None,    
         ):
 
         self.spark = spark
@@ -41,6 +45,10 @@ class DLTPipeline():
         self.source_class = source_class
         self.raw_base_path = raw_base_path
         self.tags = tags
+        self.eventhub_client_id = eventhub_client_id
+        self.eventhub_client_secret = eventhub_client_secret
+        self.eventhub_azure_tenant_id = eventhub_azure_tenant_id
+        self.eventhub_connection_string = eventhub_connection_string    
 
         if not self.tags:
             self.tags = {}
@@ -91,6 +99,7 @@ class DLTPipeline():
             name=f"bronze_{target_class}",
             table_properties={
                 "quality": "bronze",
+                "pipelines.reset.allowed": "false",
             },
             partition_cols=partition_cols,
         )
@@ -154,6 +163,14 @@ class DLTPipeline():
             quarantine_rules = None
         else:
             quarantine_rules = f'NOT(({") AND (".join(expectations.values())}))'
+        if not client_id:
+            client_id = self.eventhub_client_id
+        if not client_secret:
+            client_secret = self.eventhub_client_secret
+        if not azure_tenant_id:
+            azure_tenant_id = self.eventhub_azure_tenant_id
+        if not eventhub_connection_string:
+            eventhub_connection_string = self.eventhub_connection_string
 
         kafka_options = {
             "kafka.bootstrap.servers"  : f"{eventhub_namespace}.servicebus.windows.net:9093",
@@ -204,6 +221,7 @@ class DLTPipeline():
 
     def bronze_to_silver_append(
         self,
+        source_class: str = None,
         source_classes: str = None,
         target_class: str = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
@@ -214,8 +232,12 @@ class DLTPipeline():
 
         if not partition_cols:
             partition_cols = []
-        if not source_classes:
-            source_classes = [self.source_class]
+        if not source_class:
+            source_class = self.source_class
+        if source_classes:
+            warnings.warn("Argument source_classes is deprecated, use source_class instead.",
+                category=DeprecationWarning,
+                stacklevel=2)
         if not target_class:
             target_class = self.source_class
 
@@ -237,7 +259,10 @@ class DLTPipeline():
             partition_cols=partition_cols,
         )
         def dlt_table():
-            silver_df = self.__union_streams([f"bronze_{t}" for t in source_classes])
+            if source_classes:
+                silver_df = self.__union_streams([f"bronze_{t}" for t in source_classes])
+            else:
+                silver_df = dlt.read_stream(f"bronze_{source_class}")
 
             if "_quarantined".upper() in (name.upper() for name in silver_df.columns):
                 silver_df = (
@@ -262,6 +287,7 @@ class DLTPipeline():
         keys: list[str],
         sequence_by: str,
         hash_keys: bool = False,
+        source_class: str = None,
         source_classes: list[str] = None,
         target_class: str = None,
         ignore_null_updates: bool = False,
@@ -282,8 +308,12 @@ class DLTPipeline():
 
         if not partition_cols:
             partition_cols = []
-        if not source_classes:
-            source_classes = [self.source_class]
+        if not source_class:
+            source_class = self.source_class
+        if source_classes:
+            warnings.warn("Argument source_classes is deprecated, use source_class instead.",
+                category=DeprecationWarning,
+                stacklevel=2)
         if not target_class:
             target_class = self.source_class
 
@@ -298,7 +328,10 @@ class DLTPipeline():
 
         @dlt.view(name=f"view_silver_{target_class}")
         def dlt_view():
-            silver_df = self.__union_streams([f"bronze_{t}" for t in source_classes])
+            if source_classes:
+                silver_df = self.__union_streams([f"bronze_{t}" for t in source_classes])
+            else:
+                silver_df = dlt.read_stream(f"bronze_{source_class}")
 
             if "_quarantined".upper() in (name.upper() for name in silver_df.columns):
                 silver_df = (
@@ -347,6 +380,7 @@ class DLTPipeline():
         keys: list[str],
         sequence_by: str,
         hash_keys: bool = False,
+        source_class: str = None,
         source_classes: list[str] = None,
         target_class: str = None,
         ignore_null_updates: bool = False,
@@ -368,8 +402,12 @@ class DLTPipeline():
                 category=DeprecationWarning,
                 stacklevel=2)
 
-        if not source_classes:
-            source_classes = [self.source_class]
+        if not source_class:
+            source_class = self.source_class
+        if source_classes:
+            warnings.warn("Argument source_classes is deprecated, use source_class instead.",
+                category=DeprecationWarning,
+                stacklevel=2)
         if not target_class:
             target_class = self.source_class
         if not partition_cols:
@@ -390,7 +428,10 @@ class DLTPipeline():
         @dlt.view(name=f"view_silver_{target_class}_changes")
         @dlt.expect_all(expectations)
         def dlt_view():
-            silver_df = self.__union_streams([f"bronze_{t}" for t in source_classes])
+            if source_classes:
+                silver_df = self.__union_streams([f"bronze_{t}" for t in source_classes])
+            else:
+                silver_df = dlt.read_stream(f"bronze_{source_class}")
 
             if "_quarantined".upper() in (name.upper() for name in silver_df.columns):
                 silver_df = (
@@ -440,6 +481,7 @@ class DLTPipeline():
     def silver_to_gold(
         self,
         name: str,
+        source_class: str = None,
         source_classes: list[str] = None,
         target_class: str = None,
         parse: Callable[[DataFrame], DataFrame] = lambda df: df,
@@ -447,8 +489,12 @@ class DLTPipeline():
         ):
         """Ingest data from one or more silver tables to a gold table"""
 
-        if not source_classes:
-            source_classes = [self.source_class]
+        if not source_class:
+            source_class = self.source_class
+        if source_classes:
+            warnings.warn("Argument source_classes is deprecated, use source_class instead.",
+                category=DeprecationWarning,
+                stacklevel=2)
         if not target_class:
             target_class = self.source_class
         if not expectations:
@@ -463,7 +509,10 @@ class DLTPipeline():
         )
         @dlt.expect_all_or_fail(expectations)
         def dlt_table():
-            gold_df = self.__union_tables([f"silver_{t}" for t in source_classes])
+            if source_classes:
+                gold_df = self.__union_tables([f"silver_{t}" for t in source_classes])
+            else:
+                gold_df = dlt.read(f"silver_{source_class}")
 
             if "_quarantined".upper() in (name.upper() for name in gold_df.columns):
                 gold_df = (
