@@ -20,7 +20,7 @@ import functools
 from typing import Callable
 import warnings
 from pyspark.sql import DataFrame, Column
-from pyspark.sql.functions import col, current_timestamp, expr, lit, concat_ws, sha2
+from pyspark.sql.functions import col, current_timestamp, expr, lit, concat_ws, sha2, coalesce
 
 class DLTPipeline():
     """class contains typical source functions for a DLT pipeline"""
@@ -124,10 +124,13 @@ class DLTPipeline():
                 .load(f"{self.raw_base_path}/{self.source_system}/{source_class}")
                 .transform(parse)
                 .withColumn("_ingest_time", current_timestamp())
+                .withColumn("_file_timestamp", col("_metadata.file_modification_time"))
             )
 
             if quarantine_rules:
                 result_df = result_df.withColumn("_quarantined", expr(quarantine_rules))
+            else:
+                result_df = result_df.withColumn("_quarantined",  lit(False))
 
             return result_df
 
@@ -215,6 +218,8 @@ class DLTPipeline():
 
             if quarantine_rules:
                 result_df = result_df.withColumn("_quarantined", expr(quarantine_rules))
+            else:
+                result_df = result_df.withColumn("_quarantined",  lit(False))
 
             return result_df
 
@@ -267,7 +272,7 @@ class DLTPipeline():
             if "_quarantined".upper() in (name.upper() for name in silver_df.columns):
                 silver_df = (
                     silver_df
-                    .where(col("_quarantined") == lit(False))
+                    .where(coalesce(col("_quarantined"), lit(False)) == lit(False))
                     .drop("_quarantined")
                 )
 
@@ -275,6 +280,8 @@ class DLTPipeline():
 
             if quarantine_rules:
                 silver_df = silver_df.withColumn("_quarantined", expr(quarantine_rules))
+            else:
+                silver_df = silver_df.withColumn("_quarantined",  lit(False))
 
             if "_rescued_data" in silver_df.schema.fieldNames():
                 silver_df = silver_df.drop("_rescued_data")
@@ -336,7 +343,7 @@ class DLTPipeline():
             if "_quarantined".upper() in (name.upper() for name in silver_df.columns):
                 silver_df = (
                     silver_df
-                    .where(col("_quarantined") == lit(False))
+                    .where(coalesce(col("_quarantined"), lit(False)) == lit(False))
                     .drop("_quarantined")
                 )
 
@@ -344,6 +351,8 @@ class DLTPipeline():
 
             if quarantine_rules:
                 silver_df = silver_df.withColumn("_quarantined", expr(quarantine_rules))
+            else:
+                silver_df = silver_df.withColumn("_quarantined",  lit(False))
 
             if "_rescued_data" in silver_df.schema.fieldNames():
                 silver_df = silver_df.drop("_rescued_data")
@@ -436,7 +445,7 @@ class DLTPipeline():
             if "_quarantined".upper() in (name.upper() for name in silver_df.columns):
                 silver_df = (
                     silver_df
-                    .where(col("_quarantined") == lit(False))
+                    .where(coalesce(col("_quarantined"), lit(False)) == lit(False))
                     .drop("_quarantined")
                 )
 
@@ -444,6 +453,8 @@ class DLTPipeline():
 
             if quarantine_rules:
                 silver_df = silver_df.withColumn("_quarantined", expr(quarantine_rules))
+            else:
+                silver_df = silver_df.withColumn("_quarantined",  lit(False))
 
             if "_rescued_data" in silver_df.schema.fieldNames():
                 silver_df = silver_df.drop("_rescued_data")
@@ -517,7 +528,7 @@ class DLTPipeline():
             if "_quarantined".upper() in (name.upper() for name in gold_df.columns):
                 gold_df = (
                     gold_df
-                    .where(col("_quarantined") == lit(False))
+                    .where(coalesce(col("_quarantined"), lit(False)) == lit(False))
                     .drop("_quarantined")
                 )
 
